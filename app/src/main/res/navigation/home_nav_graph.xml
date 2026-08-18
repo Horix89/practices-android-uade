@@ -22,20 +22,32 @@
             android:defaultValue="" />
 
         <action
-            android:id="@+id/action_home_to_detail"
-            app:destination="@id/detailFragment" />
+            android:id="@+id/action_home_to_pokemon"
+            app:destination="@id/pokemonListFragment" />
     </fragment>
 
     <fragment
-        android:id="@+id/detailFragment"
-        android:name="com.example.activitiesandviews.ui.home.DetailFragment"
-        android:label="Detail"
-        tools:layout="@layout/fragment_detail">
+        android:id="@+id/pokemonListFragment"
+        android:name="com.example.activitiesandviews.ui.pokemon.PokemonListFragment"
+        android:label="Pokemones"
+        tools:layout="@layout/fragment_pokemon_list">
+
+        <action
+            android:id="@+id/action_pokemonList_to_detail"
+            app:destination="@id/pokemonDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/pokemonDetailFragment"
+        android:name="com.example.activitiesandviews.ui.pokemon.PokemonDetailFragment"
+        android:label="Detalle"
+        tools:layout="@layout/fragment_pokemon_detail">
 
         <argument
-            android:name="username"
+            android:name="pokemonName"
             app:argType="string"
             android:defaultValue="" />
     </fragment>
+
 
 </navigation>

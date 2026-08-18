@@ -1,115 +1,300 @@
-# ActivitiesAndViews - Fragments y Navigation Component
+# Clase 3 — API REST & Retrofit
 
-## Branches del proyecto
+## ¿Qué agregamos en esta clase?
 
-| Branch | Contenido |
-|--------|-----------|
-| `feature/navigation-intents` | Navegación entre Activities con Intents |
-| `feature/navigation-component` | **Fragments + Navigation Component (este branch)** |
+Conectamos la app a una API pública real: **PokeAPI** (`https://pokeapi.co/api/v2/`).
+
+El flujo nuevo es:
+
+```
+Login → Home → "Ver Pokemones" → Lista de pokemones → Tap en uno → Detalle
+```
+
+Sin DI. Retrofit se instancia y se usa directamente desde los Fragments.
 
 ---
 
-## ¿Qué aprendemos en este branch?
+## Dependencias nuevas
 
-Migramos de la navegación tradicional Activity-based a **Single Activity Architecture** usando el **Navigation Component** de Jetpack. El proyecto demuestra:
+```toml
+# gradle/libs.versions.toml
+[versions]
+retrofit = "2.9.0"
+glide    = "4.16.0"
 
-1. Qué es un Fragment y cómo difiere de una Activity
-2. Ciclo de vida de un Fragment (`onCreateView` vs `onViewCreated`)
-3. Navegación entre Fragments con `NavController`
-4. Cómo pasar argumentos entre Fragments con `Bundle`
-5. Control del back stack con `popUpTo` y `popUpToInclusive`
-6. Organización del código en múltiples nav graphs
+[libraries]
+retrofit      = { group = "com.squareup.retrofit2", name = "retrofit",        version.ref = "retrofit" }
+retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson",  version.ref = "retrofit" }
+glide         = { group = "com.github.bumptech.glide", name = "glide",        version.ref = "glide" }
+```
+
+```kotlin
+// app/build.gradle.kts
+implementation(libs.retrofit)
+implementation(libs.retrofit.gson)
+implementation(libs.glide)
+```
+
+También se agregó el permiso de internet en `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
 
 ---
 
-## Contexto: ¿por qué migrar de Activities a Fragments?
+## Estructura de la capa de red
 
-En el branch anterior (`feature/navigation-intents`) cada pantalla era una **Activity** independiente. Eso funciona, pero tiene limitaciones:
-
-| Activities (branch anterior) | Fragments (este branch) |
-|------------------------------|------------------------|
-| Cada pantalla es una Activity | Una sola Activity, múltiples Fragments |
-| Navegación via Intents | Navegación via NavController |
-| Back stack manejado por el sistema | Back stack manejado por Navigation Component |
-| Datos pasados con `putExtra` | Datos pasados con `Bundle` |
-| Sin control fino del back stack | `popUpTo` para control preciso |
-
-Google recomienda **Single Activity Architecture** desde 2019. Todos los proyectos oficiales (Now in Android, architecture-samples) y Jetpack Compose usan este patrón.
+```
+data/
+├── model/
+│   ├── PokemonResult.java         ← { name, url } — un ítem de la lista
+│   ├── PokemonListResponse.java   ← { count, results: List<PokemonResult> }
+│   ├── PokemonDetail.java         ← { name, height, weight, sprites, types }
+│   ├── PokemonSprites.java        ← sprites.other.official-artwork.front_default
+│   └── PokemonTypeSlot.java       ← types[].type.name
+└── network/
+    ├── PokemonApiService.java     ← interfaz con @GET endpoints
+    └── RetrofitClient.java        ← singleton que construye la instancia de Retrofit
+```
 
 ---
 
-## Conceptos clave
+## Paso 1 — RetrofitClient (Singleton)
 
-### ¿Qué es un Fragment?
-
-Un Fragment es una **porción reutilizable de interfaz de usuario** que vive dentro de una Activity. A diferencia de una Activity, un Fragment no puede existir solo — siempre necesita una Activity que lo contenga.
-
-```
-Activity (MainActivity)
-    │
-    └── FragmentContainerView  ← "el contenedor"
-            │
-            ├── LoginFragment     ← pantalla de login
-            ├── HomeFragment      ← pantalla de bienvenida
-            └── DetailFragment    ← pantalla de detalle
-```
-
-### Ciclo de vida de un Fragment
-
-El ciclo de vida de un Fragment tiene más etapas que el de una Activity. Las dos más importantes para nosotros son:
-
-```
-onCreateView()   → inflás el layout, devolvés la View
-                   NO accedas a las vistas aquí
-
-onViewCreated()  → la View ya está creada y disponible
-                   acá buscás vistas con findViewById y seteás listeners
-```
+No usamos DI. `RetrofitClient` es una clase con un método estático `getInstance()` que crea la instancia una sola vez y la reutiliza:
 
 ```java
-@Override
-public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                         Bundle savedInstanceState) {
-    // Solo inflar — no buscar vistas
-    return inflater.inflate(R.layout.fragment_login, container, false);
-}
+public class RetrofitClient {
 
-@Override
-public void onViewCreated(View view, Bundle savedInstanceState) {
-    super.onViewCreated(view, savedInstanceState);
-    // Acá sí podés usar view.findViewById(...)
-    Button btnIngresar = view.findViewById(R.id.btnIngresar);
+    private static final String BASE_URL = "https://pokeapi.co/api/v2/";
+    private static Retrofit instance;
+
+    public static Retrofit getInstance() {
+        if (instance == null) {
+            instance = new Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+        }
+        return instance;
+    }
 }
 ```
 
-### ¿Qué es el Navigation Component?
-
-El Navigation Component es una librería de Jetpack que centraliza toda la navegación de la app en un solo archivo XML: el **nav graph**.
-
-Tiene tres piezas principales:
-
-| Pieza | Qué es | Dónde vive |
-|-------|--------|------------|
-| `NavGraph` | El mapa de destinos y acciones | `res/navigation/*.xml` |
-| `NavHost` | El contenedor donde se muestran los Fragments | `activity_main.xml` |
-| `NavController` | El que ejecuta la navegación | Se obtiene en el Fragment |
+> **¿Por qué singleton?** Retrofit y OkHttp son objetos pesados — tienen thread pools, caché de conexiones, etc. Crear uno por request sería un desperdicio. El singleton garantiza que se crea una sola vez y se reutiliza en toda la app.
 
 ---
 
-## Flujo de la app
+## Paso 2 — PokemonApiService (Interfaz)
+
+Retrofit convierte una interfaz Java con anotaciones en llamadas HTTP reales:
+
+```java
+public interface PokemonApiService {
+
+    @GET("pokemon")
+    Call<PokemonListResponse> getPokemon(@Query("limit") int limit);
+    // → GET https://pokeapi.co/api/v2/pokemon?limit=20
+
+    @GET("pokemon/{name}")
+    Call<PokemonDetail> getPokemonDetail(@Path("name") String name);
+    // → GET https://pokeapi.co/api/v2/pokemon/bulbasaur
+}
+```
+
+| Anotación | Qué hace |
+|---|---|
+| `@GET("pokemon")` | Define el path relativo a la base URL |
+| `@Query("limit")` | Agrega un query param: `?limit=20` |
+| `@Path("name")` | Reemplaza `{name}` en la URL con el valor del parámetro |
+| `Call<T>` | Representa la llamada HTTP. `T` es el tipo que Gson va a parsear |
+
+---
+
+## Paso 3 — Hacer una petición HTTP: `enqueue()`
+
+### ¿Cómo funciona `enqueue` a nivel Java?
+
+Java tiene un concepto llamado **threads** (hilos). Por defecto, todo el código de una app Android corre en un único hilo: el **Main Thread** (también llamado UI Thread). Este hilo es el responsable de dibujar la pantalla y responder al usuario.
+
+Si hacés una llamada de red en el Main Thread, ese hilo queda **bloqueado esperando la respuesta**. Mientras espera, no puede redibujar la pantalla ni responder a ningún toque. El sistema detecta esto y lanza la excepción:
 
 ```
-MainActivity (NavHost — única Activity)
-       │
-       └── nav_graph.xml (raíz)
-              ├── auth_nav_graph.xml
-              │       └── LoginFragment (start)
-              │               └──(action_auth_to_home + username)──►
-              └── home_nav_graph.xml
-                      ├── HomeFragment (start)
-                      │       ├──(action_home_to_detail + username)──► DetailFragment
-                      │       └──(logout: popUpTo nav_graph)──► LoginFragment
-                      └── DetailFragment
+NetworkOnMainThreadException
+```
+
+`enqueue()` resuelve el problema así:
+
+```
+Main Thread                         Hilo de red (OkHttp thread pool)
+     │                                          │
+     │  call.enqueue(callback)                  │
+     │─────────────────────────────────────────►│  hace la request HTTP
+     │                                          │  espera la respuesta...
+     │  (sigue dibujando la UI, sin bloqueos)   │  recibe la respuesta
+     │                                          │  parsea el JSON con Gson
+     │◄─────────────────────────────────────────│  llama a onResponse()
+     │                                          │
+     │  actualiza la UI con los datos           │
+```
+
+1. `enqueue()` **encola** la petición en un hilo separado (OkHttp maneja el pool de hilos)
+2. El Main Thread queda libre — la UI sigue respondiendo
+3. Cuando llega la respuesta, Retrofit la parsea y **vuelve al Main Thread** para llamar a `onResponse()` o `onFailure()`
+4. Como `onResponse()` corre en el Main Thread, podés tocar la UI directamente sin problemas
+
+```java
+// En el Fragment — onViewCreated()
+PokemonApiService apiService = RetrofitClient.getInstance()
+        .create(PokemonApiService.class);
+
+Call<PokemonListResponse> call = apiService.getPokemon(20);
+
+call.enqueue(new Callback<PokemonListResponse>() {
+
+    @Override
+    public void onResponse(Call<PokemonListResponse> call,
+                           Response<PokemonListResponse> response) {
+        // Corre en el Main Thread — podés tocar la UI
+        if (response.isSuccessful()) {
+            List<PokemonResult> lista = response.body().getResults();
+            // actualizar RecyclerView...
+        } else {
+            // response.code() → 404, 500, etc.
+        }
+    }
+
+    @Override
+    public void onFailure(Call<PokemonListResponse> call, Throwable t) {
+        // Error de red (sin internet, timeout, etc.)
+        // También corre en el Main Thread
+        Log.e("TAG", t.getMessage());
+    }
+});
+```
+
+> **Regla de oro:** siempre usá `enqueue()`, nunca `execute()`. `execute()` es la versión sincrónica — bloquea el Main Thread y lanza `NetworkOnMainThreadException`.
+
+---
+
+## Paso 4 — Modelos: cómo Gson parsea el JSON
+
+La PokeAPI devuelve este JSON para el listado:
+
+```json
+{
+  "count": 1350,
+  "results": [
+    { "name": "bulbasaur", "url": "https://pokeapi.co/api/v2/pokemon/1/" },
+    { "name": "ivysaur",   "url": "https://pokeapi.co/api/v2/pokemon/2/" }
+  ]
+}
+```
+
+Creamos una clase Java que "espeja" esa estructura. Gson mapea cada campo del JSON al campo Java correspondiente usando `@SerializedName`:
+
+```java
+public class PokemonListResponse {
+    @SerializedName("count")
+    private int count;
+
+    @SerializedName("results")
+    private List<PokemonResult> results;
+    // getters...
+}
+
+public class PokemonResult {
+    @SerializedName("name")
+    private String name;
+
+    @SerializedName("url")
+    private String url;
+    // getters...
+}
+```
+
+### Truco: URL del sprite sin una segunda llamada
+
+La URL de cada pokemon en la lista tiene la forma:
+```
+https://pokeapi.co/api/v2/pokemon/1/
+```
+
+El número al final es el ID del pokemon. Las imágenes de la PokeAPI siguen el patrón:
+```
+https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{ID}.png
+```
+
+Podemos extraer el ID de la URL y construir la del sprite directamente, sin hacer una segunda llamada a la API:
+
+```java
+public String getSpriteUrl() {
+    String[] parts = url.split("/");
+    String id = parts[parts.length - 1]; // "1", "2", etc.
+    return "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + id + ".png";
+}
+```
+
+---
+
+## Paso 5 — Glide: cargar imágenes desde una URL
+
+Glide es una librería para cargar imágenes desde internet. Maneja automáticamente el hilo de descarga, el caché y el redimensionado:
+
+```java
+Glide.with(context)
+     .load(pokemon.getSpriteUrl())  // URL de la imagen
+     .into(ivPokemon);              // ImageView destino
+```
+
+| | **Retrofit** | **Glide** |
+|---|---|---|
+| ¿Qué descarga? | JSON de una API | Imágenes desde una URL |
+| ¿En qué hilo? | Hilo separado (enqueue) | Hilo separado (automático) |
+| ¿Qué devuelve? | Objeto Java (via Gson) | Imagen en un ImageView |
+| Caché | No por defecto | Sí, automático |
+
+---
+
+## Paso 6 — RecyclerView y click listener
+
+Ver **[RecyclerView.md](./RecyclerView.md)** para la explicación completa de cómo funciona.
+
+Para el click en cada ítem, el Adapter expone una interfaz que el Fragment implementa. Así el Adapter no sabe nada de navegación:
+
+```java
+// Interfaz definida en el Adapter
+public interface OnPokemonClickListener {
+    void onPokemonClick(String pokemonName);
+}
+
+// El Fragment la implementa con una lambda al crear el Adapter
+new PokemonAdapter(lista, pokemonName -> {
+    Bundle args = new Bundle();
+    args.putString("pokemonName", pokemonName);
+    Navigation.findNavController(view)
+            .navigate(R.id.action_pokemonList_to_detail, args);
+});
+```
+
+---
+
+## Flujo completo de navegación
+
+```
+MainActivity (NavHost)
+└── nav_graph.xml
+    ├── auth_nav_graph.xml
+    │   └── LoginFragment
+    │         └──(action_auth_to_home)──► home_nav_graph
+    └── home_nav_graph.xml
+        ├── HomeFragment
+        │     └──(action_home_to_pokemon)──► PokemonListFragment
+        ├── PokemonListFragment
+        │     └──(action_pokemonList_to_detail + pokemonName)──► PokemonDetailFragment
+        └── PokemonDetailFragment
+              └── GET /pokemon/{name} → imagen + nombre + tipos + altura + peso
 ```
 
 ---
@@ -119,285 +304,54 @@ MainActivity (NavHost — única Activity)
 ```
 app/src/main/
 ├── java/com/example/activitiesandviews/
-│   ├── ui/
-│   │   ├── MainActivity.java          ← única Activity, solo configura el NavHost
-│   │   ├── auth/
-│   │   │   └── LoginFragment.java     ← pantalla de login
-│   │   └── home/
-│   │       ├── HomeFragment.java      ← pantalla de bienvenida
-│   │       └── DetailFragment.java    ← pantalla de detalle
 │   ├── data/
-│   │   ├── repository/                ← (vacío, para futuras clases)
-│   │   └── model/                     ← (vacío, para futuras clases)
-│   ├── LoginActivity.java             ← referencia: branch anterior
-│   └── HomeActivity.java              ← referencia: branch anterior
+│   │   ├── model/
+│   │   │   ├── PokemonResult.java         ← ítem de la lista { name, url, getSpriteUrl() }
+│   │   │   ├── PokemonListResponse.java   ← respuesta del GET /pokemon
+│   │   │   ├── PokemonDetail.java         ← respuesta del GET /pokemon/{name}
+│   │   │   ├── PokemonSprites.java        ← sprites → other → official-artwork
+│   │   │   └── PokemonTypeSlot.java       ← types[].type.name
+│   │   └── network/
+│   │       ├── RetrofitClient.java        ← singleton, construye la instancia de Retrofit
+│   │       └── PokemonApiService.java     ← interfaz con @GET, @Query, @Path
+│   └── ui/
+│       ├── MainActivity.java
+│       ├── auth/
+│       │   └── LoginFragment.java
+│       ├── home/
+│       │   └── HomeFragment.java
+│       └── pokemon/
+│           ├── PokemonListFragment.java   ← llama GET /pokemon, muestra RecyclerView
+│           ├── PokemonDetailFragment.java ← llama GET /pokemon/{name}, muestra detalle
+│           └── PokemonAdapter.java        ← adapter del RecyclerView + click listener
 └── res/
     ├── layout/
-    │   ├── activity_main.xml          ← solo contiene el FragmentContainerView
-    │   ├── fragment_login.xml         ← diseño del login
-    │   ├── fragment_home.xml          ← diseño del home
-    │   └── fragment_detail.xml        ← diseño del detalle
+    │   ├── fragment_pokemon_list.xml      ← RecyclerView + ProgressBar + tvError
+    │   ├── fragment_pokemon_detail.xml    ← imagen + nombre + tipos + altura + peso
+    │   └── item_pokemon.xml               ← card con imagen y nombre (una fila)
     └── navigation/
-        ├── nav_graph.xml              ← raíz: incluye los dos sub-graphs
-        ├── auth_nav_graph.xml         ← graph de autenticación
-        └── home_nav_graph.xml         ← graph del home
+        └── home_nav_graph.xml             ← pokemonListFragment y pokemonDetailFragment
 ```
-
----
-
-## Paso a paso: cómo se implementó
-
-### Paso 1 — Agregar dependencias (`libs.versions.toml`)
-
-```toml
-[versions]
-navigation = "2.8.9"
-
-[libraries]
-navigation-fragment = { group = "androidx.navigation", name = "navigation-fragment", version.ref = "navigation" }
-navigation-ui      = { group = "androidx.navigation", name = "navigation-ui",      version.ref = "navigation" }
-```
-
-```kotlin
-// app/build.gradle.kts
-dependencies {
-    implementation(libs.navigation.fragment)
-    implementation(libs.navigation.ui)
-}
-```
-
----
-
-### Paso 2 — NavHost en `activity_main.xml`
-
-`MainActivity` ya no tiene contenido propio. Solo declara el **contenedor** donde vivirán los Fragments:
-
-```xml
-<androidx.fragment.app.FragmentContainerView
-    android:id="@+id/nav_host_fragment"
-    android:name="androidx.navigation.fragment.NavHostFragment"
-    app:defaultNavHost="true"
-    app:navGraph="@navigation/nav_graph" />
-```
-
-| Atributo | Significado |
-|----------|-------------|
-| `android:name` | Indica que este contenedor es un NavHostFragment |
-| `app:defaultNavHost="true"` | Intercepta el botón "atrás" del sistema |
-| `app:navGraph` | El archivo XML que define los destinos |
-
----
-
-### Paso 3 — Nav graphs
-
-#### `nav_graph.xml` (raíz)
-
-El grafo raíz no define destinos directamente. Solo **incluye** los sub-graphs y declara cuál es el inicio:
-
-```xml
-<navigation
-    android:id="@+id/nav_graph"
-    app:startDestination="@id/auth_nav_graph">
-
-    <include app:graph="@navigation/auth_nav_graph" />
-    <include app:graph="@navigation/home_nav_graph" />
-
-</navigation>
-```
-
-#### `auth_nav_graph.xml`
-
-```xml
-<navigation
-    android:id="@+id/auth_nav_graph"
-    app:startDestination="@id/loginFragment">
-
-    <fragment android:id="@+id/loginFragment"
-              android:name="...ui.auth.LoginFragment">
-        <action
-            android:id="@+id/action_auth_to_home"
-            app:destination="@id/home_nav_graph"
-            app:popUpTo="@id/auth_nav_graph"
-            app:popUpToInclusive="true" />
-    </fragment>
-
-</navigation>
-```
-
-> `popUpTo` + `popUpToInclusive="true"` sobre `auth_nav_graph`: al navegar al home, el login se elimina del back stack. El usuario no puede volver al login tocando "atrás".
-
-#### `home_nav_graph.xml`
-
-```xml
-<navigation
-    android:id="@+id/home_nav_graph"
-    app:startDestination="@id/homeFragment">
-
-    <argument name="username" app:argType="string" android:defaultValue="" />
-
-    <fragment android:id="@+id/homeFragment" ...>
-        <argument name="username" app:argType="string" android:defaultValue="" />
-        <action android:id="@+id/action_home_to_detail"
-                app:destination="@id/detailFragment" />
-    </fragment>
-
-    <fragment android:id="@+id/detailFragment" ...>
-        <argument name="username" app:argType="string" android:defaultValue="" />
-    </fragment>
-
-</navigation>
-```
-
----
-
-### Paso 4 — Pasar argumentos entre Fragments
-
-A diferencia de los Intents (que usaban `putExtra`/`getStringExtra`), entre Fragments se usa un **Bundle** para enviar y `getArguments()` para recibir.
-
-**Envío (LoginFragment → HomeFragment):**
-```java
-Bundle args = new Bundle();
-args.putString("username", username);
-
-Navigation.findNavController(view)
-        .navigate(R.id.action_auth_to_home, args);
-```
-
-**Recepción (HomeFragment):**
-```java
-String username = getArguments() != null
-        ? getArguments().getString("username", "")
-        : "";
-```
-
-> La clave `"username"` debe coincidir exactamente en el envío y la recepción, igual que con `putExtra`/`getStringExtra` en los Intents.
-
----
-
-### Paso 5 — NavController
-
-El `NavController` es el objeto que ejecuta las navegaciones. Se obtiene desde cualquier Fragment con:
-
-```java
-Navigation.findNavController(view).navigate(R.id.action_auth_to_home, args);
-```
-
-En `MainActivity` lo guardamos para soportar el botón "atrás" del sistema:
-
-```java
-NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-        .findFragmentById(R.id.nav_host_fragment);
-
-navController = navHostFragment.getNavController();
-
-// Permite que el botón "atrás" de la toolbar use el NavController
-@Override
-public boolean onSupportNavigateUp() {
-    return navController.navigateUp() || super.onSupportNavigateUp();
-}
-```
-
----
-
-### Paso 6 — Logout: navegación forzada con `popUpTo`
-
-El botón "Cerrar sesión" en `HomeFragment` navega a `auth_nav_graph` limpiando **todo** el back stack:
-
-```java
-NavOptions navOptions = new NavOptions.Builder()
-        .setPopUpTo(R.id.nav_graph, true)  // elimina todo hasta la raíz
-        .build();
-
-Navigation.findNavController(view)
-        .navigate(R.id.auth_nav_graph, null, navOptions);
-```
-
-**`popUpTo(R.id.nav_graph, true)`** — saca todo hasta el grafo raíz inclusive. El resultado es que `LoginFragment` queda como único elemento del stack.
-
----
-
-## Control del back stack: `popUpTo` y `popUpToInclusive`
-
-Estos dos atributos controlan qué se elimina del back stack al navegar.
-
-### `popUpTo`
-
-Elimina todos los destinos del stack **hasta llegar** al destino indicado:
-
-```
-Stack: [ Login | Home | Detail ]
-navigate con popUpTo="loginFragment"
-Resultado: [ Login | NuevoDestino ]   ← Login quedó, Home y Detail fueron removidos
-```
-
-### `popUpToInclusive`
-
-Extiende `popUpTo` para decidir si el destino indicado **también se elimina**:
-
-```
-popUpToInclusive="false"  →  elimina hasta Login, pero Login queda
-popUpToInclusive="true"   →  elimina hasta Login, Login también se elimina
-```
-
-### Casos de uso en este proyecto
-
-| Acción | popUpTo | inclusive | Resultado |
-|--------|---------|-----------|-----------|
-| Login exitoso | `auth_nav_graph` | `true` | Login removido, no se puede volver |
-| Logout | `nav_graph` | `true` | Todo el stack limpio, solo queda Login |
-| Navegar a Detail | — | — | Detail se apila, "atrás" vuelve a Home |
-
----
-
-## Múltiples nav graphs: ¿cómo funciona el back stack?
-
-Los nav graphs **no tienen back stacks independientes**. Todos comparten la misma pila del `NavController`. La separación es puramente organizativa.
-
-```
-Un solo back stack:
-[ LoginFragment | HomeFragment | DetailFragment ]
-                                      ↑ "atrás" → HomeFragment
-                               ↑ "atrás" → LoginFragment (si no fue eliminado)
-```
-
-La separación en múltiples graphs aporta:
-- **Organización**: cada feature tiene su propio archivo
-- **Reusabilidad**: podés incluir el mismo sub-graph en distintos lugares
-- **Encapsulamiento**: las acciones internas de un graph no se exponen al resto
-
-Para navegar de un graph a otro usás el **ID del graph** como destino:
-```java
-Navigation.findNavController(view).navigate(R.id.home_nav_graph);
-// → esto empuja el startDestination del home_nav_graph al stack
-```
-
----
-
-## Comparación: Intent vs Navigation Component
-
-| | Intents (branch anterior) | Navigation Component (este branch) |
-|--|--------------------------|-----------------------------------|
-| Unidad de pantalla | Activity | Fragment |
-| Navegación | `startActivity(intent)` | `navController.navigate(actionId)` |
-| Paso de datos | `intent.putExtra("key", value)` | `bundle.putString("key", value)` |
-| Recepción de datos | `getIntent().getStringExtra("key")` | `getArguments().getString("key")` |
-| Limpiar back stack | `FLAG_ACTIVITY_CLEAR_TASK` | `popUpTo` + `popUpToInclusive` |
-| Configuración | `AndroidManifest.xml` | `nav_graph.xml` |
 
 ---
 
 ## Resumen de conceptos
 
 | Concepto | Para qué sirve |
-|----------|---------------|
-| `Fragment` | Porción de UI reutilizable que vive dentro de una Activity |
-| `onCreateView` | Inflar el layout del Fragment |
-| `onViewCreated` | Inicializar vistas y listeners |
-| `NavHost` | Contenedor que muestra los Fragments (`FragmentContainerView`) |
-| `NavGraph` | Mapa de destinos y acciones en XML |
-| `NavController` | Ejecuta navegaciones entre Fragments |
-| `Bundle` | Contenedor clave-valor para pasar argumentos |
-| `getArguments()` | Leer los argumentos recibidos en un Fragment |
-| `popUpTo` | Elimina destinos del back stack hasta el indicado |
-| `popUpToInclusive` | Si `true`, elimina también el destino indicado |
-| `<include>` | Incluye un sub-graph dentro del grafo raíz |
+|---|---|
+| `Retrofit` | Cliente HTTP que convierte interfaces Java en llamadas HTTP |
+| `@GET / @POST` | Anotaciones que definen el verbo y path del endpoint |
+| `@Query` | Agrega query params a la URL (`?limit=20`) |
+| `@Path` | Reemplaza un segmento de la URL (`/pokemon/{name}`) |
+| `@SerializedName` | Mapea un campo JSON a un campo Java con distinto nombre |
+| `Call<T>` | Representa una llamada HTTP pendiente de ejecutar |
+| `enqueue()` | Ejecuta la llamada en un hilo separado, sin bloquear la UI |
+| `onResponse()` | Callback cuando el servidor respondió (2xx, 4xx, 5xx) |
+| `onFailure()` | Callback cuando hubo error de red (sin internet, timeout) |
+| `isSuccessful()` | `true` solo si el código HTTP es 2xx |
+| `response.code()` | Devuelve el código HTTP (200, 404, 500, etc.) |
+| `GsonConverterFactory` | Convierte automáticamente JSON → objetos Java |
+| `Glide` | Carga imágenes desde una URL en un `ImageView` |
+| `RecyclerView` | Lista que reutiliza vistas para alta performance |
+| `Adapter` | Puente entre los datos y las vistas del RecyclerView |
+| `ViewHolder` | Guarda referencias a las vistas de una fila para no llamar `findViewById` cada vez |
