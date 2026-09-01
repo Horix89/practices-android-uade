@@ -18,15 +18,21 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.activitiesandviews.R;
 import com.example.activitiesandviews.data.model.PokemonListResponse;
 import com.example.activitiesandviews.data.network.PokemonApiService;
-import com.example.activitiesandviews.data.network.RetrofitClient;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+@AndroidEntryPoint
 public class PokemonListFragment extends Fragment {
 
     private static final String TAG = "PokemonListFragment";
+
+    @Inject
+    PokemonApiService apiService;
 
     @Nullable
     @Override
@@ -48,10 +54,6 @@ public class PokemonListFragment extends Fragment {
 
         // Mostrar el loading
         progressBar.setVisibility(View.VISIBLE);
-
-        // Crear el servicio directamente (sin DI)
-        PokemonApiService apiService = RetrofitClient.getInstance()
-                .create(PokemonApiService.class);
 
         Call<PokemonListResponse> call = apiService.getPokemon(20);
 

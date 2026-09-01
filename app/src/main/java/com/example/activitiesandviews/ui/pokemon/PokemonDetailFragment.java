@@ -18,18 +18,24 @@ import com.example.activitiesandviews.R;
 import com.example.activitiesandviews.data.model.PokemonDetail;
 import com.example.activitiesandviews.data.model.PokemonTypeSlot;
 import com.example.activitiesandviews.data.network.PokemonApiService;
-import com.example.activitiesandviews.data.network.RetrofitClient;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+@AndroidEntryPoint
 public class PokemonDetailFragment extends Fragment {
 
     private static final String TAG = "PokemonDetailFragment";
+
+    @Inject
+    PokemonApiService apiService;
 
     @Nullable
     @Override
@@ -57,9 +63,6 @@ public class PokemonDetailFragment extends Fragment {
         TextView tvWeight = view.findViewById(R.id.tvWeight);
 
         progressBar.setVisibility(View.VISIBLE);
-
-        PokemonApiService apiService = RetrofitClient.getInstance()
-                .create(PokemonApiService.class);
 
         apiService.getPokemonDetail(pokemonName).enqueue(new Callback<PokemonDetail>() {
             @Override
