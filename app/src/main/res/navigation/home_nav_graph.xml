@@ -24,6 +24,10 @@
         <action
             android:id="@+id/action_home_to_pokemon"
             app:destination="@id/pokemonListFragment" />
+
+        <action
+            android:id="@+id/action_home_to_storage"
+            app:destination="@id/storageMenuFragment" />
     </fragment>
 
     <fragment
@@ -49,5 +53,41 @@
             android:defaultValue="" />
     </fragment>
 
+    <fragment
+        android:id="@+id/storageMenuFragment"
+        android:name="com.example.activitiesandviews.ui.storage.StorageMenuFragment"
+        android:label="Storage"
+        tools:layout="@layout/fragment_storage_menu">
+
+        <action
+            android:id="@+id/action_storageMenu_to_room"
+            app:destination="@id/roomFragment" />
+
+        <action
+            android:id="@+id/action_storageMenu_to_files"
+            app:destination="@id/filesFragment" />
+
+        <action
+            android:id="@+id/action_storageMenu_to_encryptedPrefs"
+            app:destination="@id/encryptedPrefsFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/roomFragment"
+        android:name="com.example.activitiesandviews.ui.storage.RoomFragment"
+        android:label="Room"
+        tools:layout="@layout/fragment_room" />
+
+    <fragment
+        android:id="@+id/filesFragment"
+        android:name="com.example.activitiesandviews.ui.storage.FilesFragment"
+        android:label="Files"
+        tools:layout="@layout/fragment_files" />
+
+    <fragment
+        android:id="@+id/encryptedPrefsFragment"
+        android:name="com.example.activitiesandviews.ui.storage.EncryptedPrefsFragment"
+        android:label="EncryptedSharedPreferences"
+        tools:layout="@layout/fragment_encrypted_prefs" />
 
 </navigation>

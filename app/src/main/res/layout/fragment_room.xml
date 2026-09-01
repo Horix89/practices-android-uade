@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Room (SQLite)"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Persiste datos estructurados en una base de datos local."
+        android:textSize="13sp"
+        android:layout_marginBottom="24dp" />
+
+    <EditText
+        android:id="@+id/etNota"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Escribe una nota"
+        android:inputType="text"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnGuardar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Guardar nota"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnVerNotas"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ver todas las notas"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnBorrarTodas"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Borrar todas"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Resultado:"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tvResultado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="15sp"
+        android:text="—" />
+
+</LinearLayout>

@@ -7,7 +7,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -36,12 +35,16 @@ public class HomeFragment extends Fragment {
 
         TextView tvWelcome = view.findViewById(R.id.tvWelcome);
         Button btnPokemon = view.findViewById(R.id.btnPokemon);
+        Button btnStorage = view.findViewById(R.id.btnStorage);
         Button btnLogout = view.findViewById(R.id.btnLogout);
 
         tvWelcome.setText("Bienvenido, " + username + "!");
 
         btnPokemon.setOnClickListener(v ->
                 Navigation.findNavController(view).navigate(R.id.action_home_to_pokemon));
+
+        btnStorage.setOnClickListener(v ->
+                Navigation.findNavController(view).navigate(R.id.action_home_to_storage));
 
         btnLogout.setOnClickListener(v -> {
             NavOptions navOptions = new NavOptions.Builder()

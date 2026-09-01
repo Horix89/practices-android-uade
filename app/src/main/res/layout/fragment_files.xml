@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Files (Almacenamiento Interno)"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Escribe y lee archivos en el directorio privado de la app."
+        android:textSize="13sp"
+        android:layout_marginBottom="24dp" />
+
+    <EditText
+        android:id="@+id/etContenido"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Contenido a escribir en el archivo"
+        android:inputType="text"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnEscribir"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Escribir archivo"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnLeer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Leer archivo"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnBorrar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Borrar archivo"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Resultado:"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tvResultado"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="15sp"
+        android:text="—" />
+
+</LinearLayout>

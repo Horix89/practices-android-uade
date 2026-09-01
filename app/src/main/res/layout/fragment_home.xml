@@ -26,10 +26,21 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
         android:text="Ver Pokemones"
-        app:layout_constraintBottom_toTopOf="@id/btnLogout"
+        app:layout_constraintBottom_toTopOf="@id/btnStorage"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvWelcome" />
+
+    <Button
+        android:id="@+id/btnStorage"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Ejemplos de Storage"
+        app:layout_constraintBottom_toTopOf="@id/btnLogout"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnPokemon" />
 
     <Button
         android:id="@+id/btnLogout"
@@ -40,6 +51,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btnPokemon" />
+        app:layout_constraintTop_toBottomOf="@id/btnStorage" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

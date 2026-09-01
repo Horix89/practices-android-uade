@@ -13,8 +13,17 @@ import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
 
 import com.example.activitiesandviews.R;
+import com.example.activitiesandviews.data.local.TokenManager;
 
+import javax.inject.Inject;
+
+import dagger.hilt.android.AndroidEntryPoint;
+
+@AndroidEntryPoint
 public class LoginFragment extends Fragment {
+
+    @Inject
+    TokenManager tokenManager;
 
     @Nullable
     @Override
@@ -33,6 +42,9 @@ public class LoginFragment extends Fragment {
 
         btnIngresar.setOnClickListener(v -> {
             String username = etNombre.getText().toString().trim();
+
+            // Simula el login guardando un token hardcodeado
+            tokenManager.saveToken("fake-token-abc123");
 
             Bundle args = new Bundle();
             args.putString("username", username);
