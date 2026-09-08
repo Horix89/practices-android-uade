@@ -39,6 +39,20 @@
         android:id="@+id/btnEncryptedPrefs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="EncryptedSharedPreferences — Datos sensibles" />
+        android:text="EncryptedSharedPreferences — Datos sensibles"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnSharedPreferences"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SharedPreferences — Pares clave-valor simples"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnDataStore"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="DataStore — Reemplazo moderno y reactivo" />
 
 </LinearLayout>

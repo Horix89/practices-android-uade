@@ -1,7 +1,11 @@
 package com.example.activitiesandviews.di;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
+import androidx.datastore.preferences.core.Preferences;
+import androidx.datastore.preferences.rxjava3.RxPreferenceDataStoreBuilder;
+import androidx.datastore.rxjava3.RxDataStore;
 import androidx.room.Room;
 
 import com.example.activitiesandviews.data.local.db.AppDatabase;
@@ -30,5 +34,17 @@ public class StorageModule {
     @Singleton
     public NoteDao provideNoteDao(AppDatabase database) {
         return database.noteDao();
+    }
+
+    @Provides
+    @Singleton
+    public SharedPreferences providePlainSharedPreferences(@ApplicationContext Context context) {
+        return context.getSharedPreferences("demo_prefs", Context.MODE_PRIVATE);
+    }
+
+    @Provides
+    @Singleton
+    public RxDataStore<Preferences> provideDataStore(@ApplicationContext Context context) {
+        return new RxPreferenceDataStoreBuilder(context, "demo_datastore").build();
     }
 }

@@ -70,6 +70,14 @@
         <action
             android:id="@+id/action_storageMenu_to_encryptedPrefs"
             app:destination="@id/encryptedPrefsFragment" />
+
+        <action
+            android:id="@+id/action_storageMenu_to_sharedPreferences"
+            app:destination="@id/sharedPreferencesFragment" />
+
+        <action
+            android:id="@+id/action_storageMenu_to_dataStore"
+            app:destination="@id/dataStoreFragment" />
     </fragment>
 
     <fragment
@@ -89,5 +97,17 @@
         android:name="com.example.activitiesandviews.ui.storage.EncryptedPrefsFragment"
         android:label="EncryptedSharedPreferences"
         tools:layout="@layout/fragment_encrypted_prefs" />
+
+    <fragment
+        android:id="@+id/sharedPreferencesFragment"
+        android:name="com.example.activitiesandviews.ui.storage.SharedPreferencesFragment"
+        android:label="SharedPreferences"
+        tools:layout="@layout/fragment_shared_preferences" />
+
+    <fragment
+        android:id="@+id/dataStoreFragment"
+        android:name="com.example.activitiesandviews.ui.storage.DataStoreFragment"
+        android:label="DataStore"
+        tools:layout="@layout/fragment_data_store" />
 
 </navigation>

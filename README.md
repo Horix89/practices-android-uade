@@ -4,60 +4,30 @@ Proyecto de prácticas en Android (Java). Este branch agrega ejemplos funcionale
 
 ---
 
-## 1. SharedPreferences — `TokenManager.java`
+## 1. SharedPreferences — 
+ Se agregó un fragment llamado `demo_prefs`, con su propia pantalla (Home → Storage → **SharedPreferences**) donde se puede escribir, leer y borrar un valor libremente y ver el resultado al instante.
 
-**Caso de uso:** Configuraciones simples y datos de sesión (flags, último usuario, token de autenticación).
-
-SharedPreferences ya estaba implementado en el proyecto como parte del branch `feature/retrofit-interceptor-token`. Se reutiliza aquí como ejemplo del método más básico de persistencia.
-
-### Cómo funciona
-
-Persiste pares clave-valor en un archivo XML en el directorio privado de la app.
 
 ```java
-private static final String PREF_NAME = "auth_prefs"; // nombre del archivo XML
-private static final String KEY_TOKEN = "token";       // clave dentro del archivo
-
-// La instancia se obtiene con getSharedPreferences()
-this.prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+// StorageModule.java
+@Provides
+@Singleton
+public SharedPreferences providePlainSharedPreferences(@ApplicationContext Context context) {
+    return context.getSharedPreferences("demo_prefs", Context.MODE_PRIVATE);
+    // "demo_prefs" es un archivo XML distinto de "auth_prefs" — no se mezclan
+    // los datos de la demo con el token real de autenticación
+}
 ```
 
-**Guardar:**
 ```java
-prefs.edit().putString(KEY_TOKEN, token).apply();
-// .edit()  → abre una transacción de escritura
-// .apply() → escribe en disco de forma asíncrona (no bloquea el main thread)
+// SharedPreferencesFragment.java
+@Inject
+SharedPreferences sharedPreferences; // Hilt inyecta el singleton de arriba, sin new ni Context manual
 ```
 
-**Leer:**
-```java
-return prefs.getString(KEY_TOKEN, null);
-// segundo argumento = valor por defecto si la clave no existe
-```
+El resto es idéntico al patrón guardar/leer/borrar ya visto: `.edit().putString(...).apply()`, `.getString(key, null)`, `.edit().remove(key).apply()`. La lectura y escritura son **síncronas** (bloquean el hilo que las llama, aunque `.apply()` escribe a disco en background) — esta es la principal diferencia frente a DataStore, ver sección 5.
 
-**Borrar:**
-```java
-prefs.edit().remove(KEY_TOKEN).apply();
-```
-
-### Dónde se persiste físicamente
-
-```
-/data/data/com.example.activitiesandviews/shared_prefs/auth_prefs.xml
-```
-
-Contenido del archivo en disco (texto plano legible):
-```xml
-<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
-<map>
-    <string name="token">fake-token-abc123</string>
-</map>
-```
-
-**Cómo observarlo en Android Studio:**
-1. `View` → `Tool Windows` → `Device File Explorer`
-2. Navegar a: `data/data/com.example.activitiesandviews/shared_prefs/`
-3. Doble click en `auth_prefs.xml` — se abre como texto plano directamente
+**Dónde se persiste:** `/data/data/com.example.activitiesandviews/shared_prefs/demo_prefs.xml` (mismo formato XML texto plano que `auth_prefs.xml`).
 
 ---
 
@@ -290,14 +260,187 @@ Comparado con `auth_prefs.xml` (SharedPreferences normal) donde el token es text
 
 ---
 
+## 5. DataStore (Preferences) — `DataStoreFragment.java`
+
+**Caso de uso:** el mismo que SharedPreferences (pares clave-valor: flags, configuración, preferencias de usuario).
+**Por qué existe si ya está SharedPreferences:** Google la presenta como su reemplazo moderno porque resuelve dos problemas de SharedPreferences:
+1. **Es asíncrona por diseño** — nunca bloquea el hilo que la llama, ni siquiera para leer (SharedPreferences sí puede bloquear en su primera carga desde disco).
+2. **Es transaccional y consistente** — cada actualización se aplica de forma atómica sobre el estado más reciente, evitando condiciones de carrera si dos partes de la app escriben al mismo tiempo (con SharedPreferences, dos `.edit()` concurrentes pueden pisarse).
+
+### Dependencia
+
+DataStore está escrito en Kotlin y expone su API "nativa" con `Flow` y funciones `suspend`. Como este proyecto es **Java puro** (sin coroutines), se usa el artefacto con wrapper de **RxJava3** que Google publica para justamente estos casos — expone `Flowable`/`Single` en vez de `Flow`/`suspend`:
+
+```kotlin
+implementation("androidx.datastore:datastore-preferences-rxjava3:1.1.7")
+implementation("io.reactivex.rxjava3:rxjava:3.1.8")
+```
+
+### Antes de seguir: ¿qué son `Flowable`, `Single`, `subscribe()` y `Disposable`?
+
+Si nunca viste RxJava, todo el código de esta sección puede parecer magia. No lo es — es el **mismo patrón de callback** que ya usaste en `PokemonListFragment` con Retrofit, solo que con nombres distintos y un poco más de vocabulario. Antes de leer el código de guardar/leer, conviene tener estas cuatro piezas claras:
+
+**1. `Flowable<T>` / `Single<T>` — "una promesa de que en algún momento va a aparecer un valor"**
+
+Son clases de RxJava que representan **algo que todavía no tenés, pero vas a recibir más adelante**, de forma parecida a un `Call<T>` de Retrofit:
+
+| Ya lo conocés de Retrofit | Equivalente en RxJava | Emite... |
+|---|---|---|
+| `Call<PokemonListResponse>` | `Single<T>` | **un solo valor**, una sola vez, y termina (o falla) |
+| — (no hay equivalente directo) | `Flowable<T>` | **cero, uno o muchos valores** a lo largo del tiempo, y puede no terminar nunca |
+
+En este proyecto:
+- `dataStore.updateDataAsync(...)` devuelve un `Single<Preferences>` → "en algún momento vas a tener el nuevo estado guardado" (una sola vez).
+- `dataStore.data()` devuelve un `Flowable<Preferences>` → "vas a recibir el estado actual, y de nuevo cada vez que alguien lo cambie" (potencialmente muchas veces). Por eso, cuando en esta demo solo queremos leer **una vez**, hay que "cortar" el stream con `.firstOrError()` (ver sección "Leer" más abajo) — si no, quedaríamos escuchando cambios para siempre.
+
+**2. `.subscribe(...)` — el equivalente exacto de `.enqueue(new Callback<>() {...})`**
+
+En `PokemonListFragment` ya escribiste esto:
+```java
+call.enqueue(new Callback<PokemonListResponse>() {
+    @Override
+    public void onResponse(Call<...> call, Response<...> response) { /* éxito */ }
+
+    @Override
+    public void onFailure(Call<...> call, Throwable t) { /* error */ }
+});
+```
+
+`.subscribe(...)` es lo mismo, pero en vez de una clase anónima con dos métodos, RxJava te deja pasar **dos lambdas**: la primera para el caso de éxito, la segunda para el error.
+
+```java
+dataStore.updateDataAsync(...)
+        .subscribe(
+                prefs -> { /* onResponse: acá "prefs" es el resultado */ },
+                throwable -> { /* onFailure: acá "throwable" es el error */ }
+        );
+```
+
+Ninguna de las dos lambdas corre en el hilo principal (el mismo motivo por el que Room usa `ExecutorService` + `runOnUiThread`) — por eso, adentro de ambas, se envuelve la actualización de la UI en `requireActivity().runOnUiThread(() -> ...)`.
+
+**3. `Disposable` — el "ticket de cancelación" de una suscripción**
+
+Cada vez que llamás a `.subscribe(...)`, RxJava te devuelve un `Disposable`: un objeto que representa esa operación en curso y que sirve para **cancelarla** si ya no te interesa el resultado (por ejemplo, porque el usuario navegó a otra pantalla). Es conceptualmente lo mismo que `call.cancel()` en Retrofit o `executor.shutdown()` en Room — una forma de decirle "pará, no hace falta que sigas".
+
+**4. `CompositeDisposable` — una "bolsa" de disposables para tirar todos juntos**
+
+Como en esta pantalla hay tres botones y por lo tanto hasta tres suscripciones activas al mismo tiempo, en vez de manejar cada `Disposable` por separado se los agrega todos a un `CompositeDisposable`, y con un solo `.clear()` en `onDestroyView()` se cancelan todas de una. Ver el detalle en "Evitar leaks" más abajo.
+
+Con estas cuatro piezas, el código de las próximas secciones se lee igual que el de Retrofit: *"hacé esta operación (`updateDataAsync`/`data()`), y cuando tengas el resultado (`.subscribe`), hacé esto; si falla, hacé esto otro"*.
+
+### Cómo se crea la instancia — `StorageModule.java`
+
+```java
+@Provides
+@Singleton
+public RxDataStore<Preferences> provideDataStore(@ApplicationContext Context context) {
+    // "demo_datastore" define el nombre del archivo interno (no es un Context.MODE_PRIVATE,
+    // DataStore no tiene modos — siempre es privado a la app)
+    return new RxPreferenceDataStoreBuilder(context, "demo_datastore").build();
+}
+```
+
+Al igual que con `SharedPreferences`, la instancia se inyecta directo con `@Inject`:
+```java
+@Inject
+RxDataStore<Preferences> dataStore;
+```
+
+### Las claves son tipadas — `Preferences.Key`
+
+```java
+private static final Preferences.Key<String> KEY_VALOR = PreferencesKeys.stringKey("valor_demo");
+// PreferencesKeys también ofrece intKey, booleanKey, floatKey, stringSetKey, etc.
+// El tipo queda fijado en la clave: no hay forma de pedir un int con una key de String por error
+```
+
+### Guardar — transacción vía `updateDataAsync`
+
+No existe un `.edit().put(...).apply()` como en SharedPreferences. En su lugar, cada escritura es una **transacción** que recibe el estado actual y devuelve el nuevo estado:
+
+```java
+dataStore.updateDataAsync(prefsIn -> {
+            // prefsIn = snapshot inmutable más reciente; se convierte a mutable para modificarla
+            MutablePreferences mutable = prefsIn.toMutablePreferences();
+            mutable.set(KEY_VALOR, value);
+            return Single.just(mutable); // se devuelve el nuevo estado envuelto en un Single
+        })
+        .subscribe(
+                prefs -> requireActivity().runOnUiThread(() -> tvResultado.setText("Guardado:\n\"" + value + "\"")),
+                throwable -> requireActivity().runOnUiThread(() -> tvResultado.setText("Error: " + throwable.getMessage()))
+        );
+```
+
+`.subscribe()` recibe la operación en un hilo interno de DataStore — por eso hace falta `runOnUiThread(...)` para tocar las vistas, igual que con el `ExecutorService` de Room.
+
+### Leer — se observa un stream, no se "hace una consulta"
+
+`dataStore.data()` devuelve un `Flowable<Preferences>` que emite el valor actual **y cada vez que cambia**. Para leer "una sola vez" (como se hace en esta demo) se toma el primer valor y se completa:
+
+```java
+dataStore.data().firstOrError() // toma la primera emisión y listo, no queda escuchando cambios futuros
+        .subscribe(
+                prefs -> requireActivity().runOnUiThread(() -> {
+                    String stored = prefs.get(KEY_VALOR); // null si la clave no existe todavía
+                    tvResultado.setText(stored != null ? "Recuperado:\n\"" + stored + "\"" : "No hay datos guardados");
+                }),
+                throwable -> requireActivity().runOnUiThread(() -> tvResultado.setText("Error: " + throwable.getMessage()))
+        );
+```
+
+Si en vez de `.firstOrError()` te suscribieras directo a `dataStore.data()`, la UI se actualizaría **sola** cada vez que el valor cambia (incluso desde otra pantalla o proceso) — esa es la diferencia de fondo con SharedPreferences, que solo se lee cuando el código explícitamente llama a `.getString(...)`.
+
+### Borrar
+
+Misma mecánica de transacción, pero removiendo la clave:
+```java
+dataStore.updateDataAsync(prefsIn -> {
+    MutablePreferences mutable = prefsIn.toMutablePreferences();
+    mutable.remove(KEY_VALOR);
+    return Single.just(mutable);
+})
+```
+
+### Evitar leaks — `CompositeDisposable`
+
+Cada `.subscribe()` devuelve un `Disposable` que sigue "vivo" en un hilo de fondo aunque el usuario haya navegado a otra pantalla. Se agregan todos a un `CompositeDisposable` y se cancelan juntos al destruirse la vista (mismo rol que `executor.shutdown()` en Room):
+
+```java
+private final CompositeDisposable disposables = new CompositeDisposable();
+// disposables.add(...) en cada botón
+
+@Override
+public void onDestroyView() {
+    super.onDestroyView();
+    disposables.clear(); // cancela cualquier operación de DataStore todavía pendiente
+}
+```
+
+### Dónde se persiste físicamente
+
+```
+/data/data/com.example.activitiesandviews/files/datastore/demo_datastore.preferences_pb
+```
+
+A diferencia de SharedPreferences, el archivo `.preferences_pb` es **binario** (protocol buffers), no XML — abrirlo como texto en el Device File Explorer muestra caracteres ilegibles en vez de un `<map>` legible.
+
+**Cómo observarlo en Android Studio:**
+1. `View` → `Tool Windows` → `Device File Explorer`
+2. Navegar a: `data/data/com.example.activitiesandviews/files/datastore/`
+3. El archivo `demo_datastore.preferences_pb` no se puede leer a simple vista — para confirmar que el dato persiste, la forma práctica es usar la propia pantalla "Recuperar" luego de matar y reabrir la app.
+
+---
+
 ## Resumen de persistencia física
 
 | Método | Ruta en el dispositivo | Formato | Legible a simple vista |
 |--------|------------------------|---------|------------------------|
-| SharedPreferences | `.../shared_prefs/auth_prefs.xml` | XML texto plano | Sí |
+| SharedPreferences (token) | `.../shared_prefs/auth_prefs.xml` | XML texto plano | Sí |
+| SharedPreferences (demo) | `.../shared_prefs/demo_prefs.xml` | XML texto plano | Sí |
 | Room | `.../databases/notes_db` | SQLite | No — usar DB Browser for SQLite |
 | Files | `.../files/mi_archivo.txt` | Texto plano | Sí |
 | EncryptedSharedPreferences | `.../shared_prefs/secure_prefs.xml` | XML cifrado | No |
+| DataStore | `.../files/datastore/demo_datastore.preferences_pb` | Protocol Buffers binario | No |
 
 ---
 
@@ -306,7 +449,7 @@ Comparado con `auth_prefs.xml` (SharedPreferences normal) donde el token es text
 ```
 app/
 ├── di/
-│   └── StorageModule.java          # Hilt: AppDatabase, NoteDao
+│   └── StorageModule.java          # Hilt: AppDatabase, NoteDao, SharedPreferences, RxDataStore<Preferences>
 ├── data/local/
 │   ├── db/
 │   │   ├── Note.java               # @Entity — tabla "notes"
@@ -314,8 +457,10 @@ app/
 │   │   └── AppDatabase.java        # @Database — punto de entrada a Room
 │   └── TokenManager.java           # SharedPreferences — token de sesión
 └── ui/storage/
-    ├── StorageMenuFragment.java    # menú con 3 botones
-    ├── RoomFragment.java           # ejemplo Room + ExecutorService
-    ├── FilesFragment.java          # ejemplo java.io filesystem
-    └── EncryptedPrefsFragment.java # ejemplo EncryptedSharedPreferences
+    ├── StorageMenuFragment.java       # menú con 5 botones
+    ├── RoomFragment.java              # ejemplo Room + ExecutorService
+    ├── FilesFragment.java             # ejemplo java.io filesystem
+    ├── EncryptedPrefsFragment.java    # ejemplo EncryptedSharedPreferences
+    ├── SharedPreferencesFragment.java # ejemplo SharedPreferences genérico (demo_prefs, vía Hilt)
+    └── DataStoreFragment.java         # ejemplo DataStore (Preferences) + RxJava3
 ```
