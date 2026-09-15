@@ -28,6 +28,10 @@
         <action
             android:id="@+id/action_home_to_storage"
             app:destination="@id/storageMenuFragment" />
+
+        <action
+            android:id="@+id/action_home_to_biometric"
+            app:destination="@id/biometricFragment" />
     </fragment>
 
     <fragment
@@ -109,5 +113,11 @@
         android:name="com.example.activitiesandviews.ui.storage.DataStoreFragment"
         android:label="DataStore"
         tools:layout="@layout/fragment_data_store" />
+
+    <fragment
+        android:id="@+id/biometricFragment"
+        android:name="com.example.activitiesandviews.ui.biometric.BiometricFragment"
+        android:label="Biometría"
+        tools:layout="@layout/fragment_biometric" />
 
 </navigation>

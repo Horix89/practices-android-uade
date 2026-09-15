@@ -36,6 +36,7 @@ public class HomeFragment extends Fragment {
         TextView tvWelcome = view.findViewById(R.id.tvWelcome);
         Button btnPokemon = view.findViewById(R.id.btnPokemon);
         Button btnStorage = view.findViewById(R.id.btnStorage);
+        Button btnBiometric = view.findViewById(R.id.btnBiometric);
         Button btnLogout = view.findViewById(R.id.btnLogout);
 
         tvWelcome.setText("Bienvenido, " + username + "!");
@@ -45,6 +46,9 @@ public class HomeFragment extends Fragment {
 
         btnStorage.setOnClickListener(v ->
                 Navigation.findNavController(view).navigate(R.id.action_home_to_storage));
+
+        btnBiometric.setOnClickListener(v ->
+                Navigation.findNavController(view).navigate(R.id.action_home_to_biometric));
 
         btnLogout.setOnClickListener(v -> {
             NavOptions navOptions = new NavOptions.Builder()

@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.datastore.preferences.rxjava3)
     implementation(libs.rxjava3)
+    implementation(libs.biometric)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
