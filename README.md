@@ -439,14 +439,62 @@ A diferencia de SharedPreferences, el archivo `.preferences_pb` es **binario** (
 
 **Caso de uso:** práctica aislada de la API `androidx.biometric`, sin integrarla todavía al flujo de login. Se llega desde Home → **"Biometría"**.
 
-### Dependencia
-```kotlin
-implementation("androidx.biometric:biometric:1.2.0-alpha05")
+### Conceptos teóricos
+
+#### Los tres factores de autenticación
+
+En cualquier sistema, la identidad de un usuario se puede verificar con tres tipos de factores:
+
+| Factor | Nombre técnico | Ejemplos | Ventaja | Desventaja |
+|--------|---------------|---------|---------|------------|
+| **Algo que sabés** | Knowledge factor | PIN, contraseña, patrón | Fácil de implementar | Se olvida, se comparte, se adivina |
+| **Algo que tenés** | Possession factor | Celular, tarjeta, token físico | Requiere robar el objeto | Se puede perder o robar |
+| **Algo que sos** | Inherence factor | Huella, rostro, iris, voz | No se olvida ni se pierde | Si se filtra, no se puede "cambiar" |
+
+> **MFA / 2FA:** combinar factores de **distinto tipo**. Dos contraseñas no son 2FA. El login de este proyecto (sección 7) combina "algo que sabés" (contraseña, en el primer ingreso) con "algo que sos" (huella, en los siguientes).
+
+#### Clasificación de biometría en Android
+
+Android clasifica los métodos biométricos en tres clases:
+
+- **Class 3 (STRONG):** permite operaciones criptográficas. Ejemplo: sensor de huella certificado.
+- **Class 2 (WEAK):** solo sirve para desbloquear la app, sin acceso a criptografía.
+- **Class 1:** no se usa en aplicaciones de terceros.
+
+Por eso este proyecto pide siempre `Authenticators.BIOMETRIC_STRONG`: es el único nivel con garantías suficientes como para, más adelante, liberar un token de sesión (sección 7).
+
+#### Por qué AndroidX Biometric y no la API nativa
+
+La API biométrica de Android cambió varias veces:
+
+```
+API 23 (Marshmallow)  →  FingerprintManager      — Solo huella. Hoy deprecado.
+API 28 (Pie)          →  BiometricPrompt nativo   — Más moderno, pero solo versiones nuevas.
+API 21+ (AndroidX)    →  androidx.biometric       — Unifica todo. Es la recomendada.
 ```
 
-### Paso 1 — `BiometricManager`: verificar disponibilidad antes de mostrar el prompt
+`AndroidX Biometric` unifica todo en una sola librería compatible desde API 21, por eso es la que se usa acá.
 
-Nunca hay que asumir que el dispositivo tiene biometría disponible. `canAuthenticate(...)` devuelve uno de varios códigos según hardware, enrolamiento y disponibilidad momentánea:
+#### Enrolamiento
+
+Una app **no puede usar biometría** si el usuario no tiene ningún método enrolado en el dispositivo. Ante esa situación hay dos opciones: deshabilitar el botón con un mensaje explicativo, o redirigir al usuario a los Ajustes del sistema.
+
+### Dependencia
+```toml
+# gradle/libs.versions.toml
+[versions]
+biometric = "1.2.0-alpha05"
+[libraries]
+biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+```
+```kotlin
+// app/build.gradle.kts
+implementation(libs.biometric)
+```
+
+### Paso 1 — `BiometricManager`: preguntar si la biometría está disponible
+
+Antes de mostrar cualquier prompt hay que consultar el estado del sistema — si se muestra el prompt sin verificar, puede lanzar una excepción.
 
 ```java
 private static final int ALLOWED_AUTHENTICATORS =
@@ -456,54 +504,151 @@ BiometricManager manager = BiometricManager.from(requireContext());
 int result = manager.canAuthenticate(ALLOWED_AUTHENTICATORS);
 
 switch (result) {
-    case BiometricManager.BIOMETRIC_SUCCESS -> // hay hardware, disponible y con credenciales enroladas
-    case BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> // no tiene sensor
-    case BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> // el sensor existe pero no responde ahora
-    case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> // no hay huella/PIN configurado — ofrecer ir a Ajustes
+    case BiometricManager.BIOMETRIC_SUCCESS:
+        // Todo OK: hay hardware, está disponible y hay credenciales enroladas
+        break;
+    case BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE:
+        // El dispositivo no tiene sensor biométrico
+        break;
+    case BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE:
+        // El hardware existe pero no está disponible en este momento
+        break;
+    case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED:
+        // No hay biometría ni PIN/patrón enrolados → ofrecer ir a Ajustes
+        break;
 }
 ```
 
+**Estados posibles:**
+
+| Constante | Significado | Acción en `BiometricFragment` |
+|-----------|------------|-------------------------------|
+| `BIOMETRIC_SUCCESS` | Listo para autenticar | Habilita `btnAuthenticate` |
+| `ERROR_NO_HARDWARE` | Sin sensor biométrico | Deshabilita el botón |
+| `ERROR_HW_UNAVAILABLE` | Sensor temporalmente no disponible | Deshabilita el botón |
+| `ERROR_NONE_ENROLLED` | No hay biometría ni PIN enrolados | Muestra `btnGoToSettings` |
+
 `BIOMETRIC_STRONG | DEVICE_CREDENTIAL` permite que el sistema acepte también el PIN/patrón del dispositivo como alternativa a la huella — útil en emuladores o dispositivos sin sensor físico.
-
-### Paso 2 — `PromptInfo`: define el diálogo del sistema
-
-```java
-BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Práctica Biometría")
-        .setSubtitle("Confirmá tu identidad")
-        .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
-        .build();
-// Con DEVICE_CREDENTIAL habilitado no se puede usar setNegativeButtonText() —
-// el propio sistema ya ofrece "usar PIN" como alternativa
-```
-
-### Paso 3 — `BiometricPrompt`: lanzar y escuchar los tres callbacks
-
-```java
-BiometricPrompt biometricPrompt = new BiometricPrompt(this, executor,
-        new BiometricPrompt.AuthenticationCallback() {
-            public void onAuthenticationSucceeded(AuthenticationResult result) { /* validado OK */ }
-            public void onAuthenticationFailed() { /* no coincide, el prompt sigue abierto */ }
-            public void onAuthenticationError(int errorCode, CharSequence errString) { /* cancelado o error del sistema */ }
-        });
-biometricPrompt.authenticate(promptInfo);
-```
-
-- `onAuthenticationFailed()` se dispara por cada intento fallido individual (el diálogo sigue abierto).
-- `onAuthenticationError(...)` es terminal: usuario canceló, superó los intentos, o un error de hardware — el diálogo se cierra.
 
 **Ir a Ajustes si no hay enrolamiento:**
 ```java
 startActivity(new Intent(Settings.ACTION_BIOMETRIC_ENROLL));
 ```
 
+### Paso 2 — `PromptInfo`: configurar el diálogo del sistema
+
+`PromptInfo` define el texto que ve el usuario en el diálogo de autenticación:
+
+```java
+BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
+        .setTitle("Práctica Biometría")
+        .setSubtitle("Confirmá tu identidad")
+        .setDescription("Usá tu huella digital o el PIN del dispositivo")
+        .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
+        .build();
+```
+
+> **Trampa frecuente:** si usás `DEVICE_CREDENTIAL`, **no podés** llamar a `.setNegativeButtonText()`. El botón de fallback ya es el PIN/patrón del dispositivo. Si querés un botón "Cancelar" explícito, usá solo `BIOMETRIC_STRONG` sin `DEVICE_CREDENTIAL`.
+
+### Paso 3 — `BiometricPrompt`: lanzar el prompt y escuchar los tres callbacks
+
+`BiometricPrompt` necesita tres cosas: el Fragment (o Activity), un `Executor` para el hilo de los callbacks, y un `AuthenticationCallback`:
+
+```java
+Executor executor = ContextCompat.getMainExecutor(requireContext());
+
+BiometricPrompt biometricPrompt = new BiometricPrompt(this, executor,
+        new BiometricPrompt.AuthenticationCallback() {
+            @Override
+            public void onAuthenticationSucceeded(AuthenticationResult result) {
+                tvStatus.setText("Autenticacion exitosa!");
+            }
+            @Override
+            public void onAuthenticationFailed() {
+                tvStatus.setText("Intento fallido. Reintenta.");
+            }
+            @Override
+            public void onAuthenticationError(int errorCode, CharSequence errString) {
+                tvStatus.setText("Error: " + errString);
+            }
+        });
+biometricPrompt.authenticate(promptInfo);
+```
+
+**Los tres callbacks:**
+
+| Callback | Cuándo se dispara | El prompt... |
+|----------|-------------------|-------------|
+| `onAuthenticationSucceeded` | Biometría validada correctamente | Se cierra |
+| `onAuthenticationFailed` | Intento no coincide | **Sigue abierto** — no hay que cerrarlo ni deshabilitar nada acá |
+| `onAuthenticationError` | Error del sistema o cancelación del usuario | Se cierra (es terminal) |
+
+### Flujo completo de navegación
+
+```
+Home
+  └─► BiometricFragment
+        │
+        ├─ [BIOMETRIC_SUCCESS]       → botón habilitado
+        ├─ [ERROR_NO_HARDWARE]       → botón deshabilitado
+        ├─ [ERROR_HW_UNAVAILABLE]    → botón deshabilitado
+        └─ [ERROR_NONE_ENROLLED]     → botón "Ir a Configuración" visible
+              │
+              └─► [click Autenticar con Biometría]
+                    │
+                    ├─ onAuthenticationSucceeded → "Autenticacion exitosa!"
+                    ├─ onAuthenticationFailed    → "Intento fallido. Reintenta."
+                    └─ onAuthenticationError     → "Error: {mensaje}"
+```
+
+### Archivos modificados / creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `gradle/libs.versions.toml` | Versión y alias de `androidx.biometric` |
+| `app/build.gradle.kts` | `implementation(libs.biometric)` |
+| `app/src/main/res/layout/fragment_biometric.xml` | Layout nuevo con `tvStatus`, `btnAuthenticate`, `btnGoToSettings` |
+| `app/src/main/java/.../ui/biometric/BiometricFragment.java` | Fragment nuevo con la lógica de los 3 pasos |
+| `app/src/main/res/navigation/home_nav_graph.xml` | Destino y acción `action_home_to_biometric` |
+| `app/src/main/res/layout/fragment_home.xml` | Botón "Biometría" nuevo |
+| `app/src/main/java/.../ui/home/HomeFragment.java` | Click handler del nuevo botón |
+
 ---
 
 ## 7. Re-autenticación biométrica en el Login — `LoginFragment.java`, `TokenManager.java`, `AuthEventBus.java`
 
-**Caso de uso:** integrar la biometría al flujo real de autenticación, no solo como demo aislada. La primera vez el usuario ingresa usuario/contraseña; en accesos siguientes, si activó la opción, el login pide huella/PIN directamente.
+**Caso de uso:** integrar la biometría al flujo real de autenticación (no solo como demo aislada) y resolver el problema que la sección 6 deja abierto: ¿de qué sirve validar la huella si después no se hace nada con esa confirmación? Acá el resultado del `BiometricPrompt` efectivamente **reemplaza** al formulario de usuario/contraseña en los accesos siguientes.
+
+### Por qué no alcanza con la biometría "sola"
+
+El sensor biométrico solo responde `true`/`false` — "sí, es la misma persona que enroló la huella" — pero no sabe nada sobre la sesión del usuario en el backend. Por eso la biometría acá **no reemplaza al token**: solo actúa como el "candado" que decide si se le entrega al usuario el token que ya se había guardado. Esto es lo mismo que hace, por ejemplo, la app de un banco cuando pide huella "para ver el saldo": la sesión ya existe, la huella solo autoriza mostrarla.
 
 ### Flujo
+
+```
+LoginFragment.onViewCreated()
+        │
+        ▼
+tokenManager.isBiometricEnabled() ?
+        │
+   ┌────┴────┐
+   NO         SÍ
+   │           │
+   ▼           ▼
+layoutCredentials    layoutBiometric → BiometricPrompt
+   │                        │
+   ▼                        ├─ onAuthenticationSucceeded → getEncryptedToken() → saveToken(...) → Home
+[Ingresar]                  ├─ onAuthenticationFailed    → (el prompt sigue abierto, sin acción)
+   │                        └─ onAuthenticationError     → showCredentialForm() (fallback)
+   ▼
+saveToken("fake-token-abc123")
+   │
+   ▼
+AlertDialog "¿Activar biometría?"
+   │
+   ├─ Sí, activar  → setBiometricEnabled(true) + saveEncryptedToken(...) → Home
+   └─ No, gracias  →  Home (sin activar nada; la próxima vez vuelve a pedir credenciales)
+```
 
 1. **Primer login:** se muestra el formulario de credenciales (`layoutCredentials`). Al presionar "Ingresar" se guarda un token simulado y se pregunta con un `AlertDialog` si el usuario quiere activar el acceso biométrico.
 2. **Si acepta:** se guarda `biometric_enabled = true` y una copia del token cifrada con `EncryptedSharedPreferences` (`TokenManager.saveEncryptedToken(...)`).
@@ -519,7 +664,7 @@ if (tokenManager.isBiometricEnabled()) {
 
 ### `TokenManager.java` — dos capas de almacenamiento
 
-Amplía el `TokenManager` original (sección de `SharedPreferences` del token) con:
+Amplía el `TokenManager` de la sección 1 (token en `SharedPreferences` plano) agregando:
 
 ```java
 // Flag de activación
@@ -532,11 +677,16 @@ public void saveEncryptedToken(String token);
 public String getEncryptedToken();
 ```
 
-El token de la sesión activa sigue en texto plano en `auth_prefs.xml` (se necesita leer rápido en cada request), mientras que la copia usada para restaurar la sesión tras el prompt biométrico vive cifrada — así un acceso de lectura al almacenamiento interno del dispositivo no expone el token reutilizable sin pasar antes por el sensor.
+| Copia del token | Dónde vive | Para qué sirve |
+|------------------|-----------|-----------------|
+| Plano (`token`) | `auth_prefs.xml` | Sesión activa — se lee en cada request (interceptor de `NetworkModule`) |
+| Cifrado (`encrypted_token`) | `encrypted_auth_prefs.xml` (EncryptedSharedPreferences) | Se guarda solo si el usuario activó biometría; se recupera **después** de validar la huella |
+
+La razón de tener dos copias: el token plano necesita ser rápido de leer (se agrega a cada header `Authorization`), pero eso lo hace legible por cualquiera con acceso al almacenamiento interno. La copia cifrada es la que se usa para *restaurar* la sesión tras el prompt biométrico — así, aunque alguien lea el archivo en disco, no puede reactivar la sesión sin pasar antes por el sensor.
 
 ### Cierre de sesión automático ante un 401 — `AuthEventBus.java`
 
-Para que la re-autenticación tenga sentido, la sesión debe poder "vencer". Se agregó un event bus con Hilt (`@Singleton`) basado en `LiveData`:
+Para que la re-autenticación tenga sentido real, la sesión tiene que poder "vencer" — si nunca expirara, pedir biometría en cada apertura de la app sería solo cosmético. Se agregó un event bus con Hilt (`@Singleton`) basado en `LiveData`, que permite que una clase sin acceso a la UI (el interceptor de red) le avise a la Activity que la sesión murió:
 
 ```java
 @Singleton
@@ -546,6 +696,8 @@ public class AuthEventBus {
     public void emitSessionExpired() { sessionExpired.postValue(true); } // postValue: thread-safe desde el hilo de red
 }
 ```
+
+`postValue(...)` (y no `setValue(...)`) es obligatorio acá porque el interceptor de OkHttp corre en un hilo de background, nunca en el main thread.
 
 El interceptor de OkHttp en `NetworkModule.java` detecta la respuesta 401, limpia el token y emite el evento:
 
@@ -569,71 +721,235 @@ authEventBus.getSessionExpired().observe(this, expired -> {
 });
 ```
 
-Nótese que `biometric_enabled` **no** se borra al expirar la sesión — el usuario vuelve a la pantalla de login y, si ya lo había activado, el próximo ingreso vuelve a pedir biometría en lugar del formulario.
+Nótese que `biometric_enabled` **no** se borra al expirar la sesión — el usuario vuelve a la pantalla de login y, si ya lo había activado, el próximo ingreso vuelve a pedir biometría en lugar del formulario (solo cambia el token, no la preferencia del usuario).
+
+### Archivos modificados / creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `data/local/TokenManager.java` | Agrega `biometric_enabled` y token cifrado (`EncryptedSharedPreferences`) |
+| `di/AuthEventBus.java` | Nuevo — `@Singleton` con `LiveData<Boolean> sessionExpired` |
+| `di/NetworkModule.java` | El interceptor detecta HTTP 401, limpia el token y emite el evento |
+| `ui/MainActivity.java` | Inyecta `AuthEventBus` y navega a `auth_nav_graph` cuando la sesión expira |
+| `ui/auth/LoginFragment.java` | Muestra `BiometricPrompt` o el formulario según `isBiometricEnabled()`; ofrece activarlo tras el primer login |
+| `res/layout/fragment_login.xml` | Agrega `layoutCredentials` / `layoutBiometric` (visibilidad alternada) |
 
 ---
 
 ## 8. Imagen de Perfil (Galería + Glide) — `ProfileImageFragment.java`
 
-**Caso de uso:** elegir una foto de la galería del dispositivo y persistir la selección, con las APIs modernas de Activity Result y permisos runtime. Se llega desde Home → Storage → **"Imagen de Perfil"**.
+**Caso de uso:** elegir una foto de la galería del dispositivo, persistir la selección y mostrarla con recorte circular. Cubre permisos runtime, `ActivityResultLauncher`, `Uri` de content provider y carga de imágenes con Glide. Se llega desde Home → Storage → **"Imagen de Perfil"**.
 
-### Permisos runtime — `AndroidManifest.xml`
+### Flujo completo
 
-Desde Android 13 (API 33), leer la galería requiere un permiso granular específico para imágenes en vez del permiso general de almacenamiento:
-
-```xml
-<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 1. Declarar permiso   →   2. Pedir en runtime   →   3. Abrir galería     │
+│    (Manifest)               (checkSelfPermission)      (GetContent)      │
+│                                                                           │
+│ 6. Mostrar con Glide  ←   5. Guardar la Uri     ←   4. Recibir Uri       │
+│    (circleCrop)              (SharedPreferences)        (launcher callback)│
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Paso 1 — Declarar el permiso en el Manifest
+
+Sin declarar el permiso en el Manifest, el sistema lo bloquea directamente — aunque el código lo pida en runtime, nunca se concede.
+
+Android fragmentó el permiso de lectura de imágenes en versiones recientes para dar al usuario más control granular:
+
+| Versión de Android | API Level | Permiso requerido | Razón del cambio |
+|---------------------|-----------|--------------------|-------------------|
+| Android 12 e inferior | ≤ 32 | `READ_EXTERNAL_STORAGE` | Permiso amplio: acceso a todo el almacenamiento externo |
+| Android 13+ | ≥ 33 | `READ_MEDIA_IMAGES` | Permiso granular: solo imágenes, sin acceso a otros archivos |
+
+```xml
+<!-- app/src/main/AndroidManifest.xml -->
+<uses-permission
+    android:name="android.permission.READ_MEDIA_IMAGES"
+    android:minSdkVersion="33" />
+<uses-permission
+    android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+```
+
+Con `minSdkVersion="33"` en el primero y `maxSdkVersion="32"` en el segundo, el sistema aplica automáticamente el permiso correcto según la versión del dispositivo.
+
+### Paso 2 — Pedir el permiso en runtime
+
+Desde Android 6.0 (API 23), los permisos **peligrosos** (los que acceden a datos sensibles) requieren aprobación explícita del usuario en el momento en que la app los necesita — declararlos en el Manifest ya no alcanza.
+
+**Detectar la versión y verificar si ya está otorgado:**
 ```java
+// Build.VERSION_CODES.TIRAMISU == 33 (Android 13)
 String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
         ? Manifest.permission.READ_MEDIA_IMAGES
         : Manifest.permission.READ_EXTERNAL_STORAGE;
+
+if (ContextCompat.checkSelfPermission(requireContext(), permission)
+        == PackageManager.PERMISSION_GRANTED) {
+    openGallery();               // ya lo teníamos de una sesión anterior
+} else {
+    permissionLauncher.launch(permission); // dispara el diálogo del sistema
+}
 ```
 
-### `ActivityResultLauncher` — dos contratos encadenados
-
-En vez del patrón antiguo `onActivityResult(requestCode, ...)`, se usan dos launchers tipados, registrados como campos del Fragment (deben crearse antes de `onStart()`):
+**`ActivityResultLauncher`** reemplaza al viejo `onActivityResult(requestCode, ...)`. Se declara como campo del Fragment (debe existir antes de `onStart()`) y se registra con un **contrato** (qué tipo de operación se lanza) más un **callback** (qué hacer con el resultado):
 
 ```java
-// 1) Pide el permiso; si es concedido, abre la galería
 private final ActivityResultLauncher<String> permissionLauncher =
-        registerForActivityResult(new ActivityResultContracts.RequestPermission(),
-                isGranted -> { if (isGranted) openGallery(); else /* Toast */ });
+        registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), // contrato: pedir 1 permiso
+                isGranted -> {                                   // callback: resultado booleano
+                    if (isGranted) {
+                        openGallery();
+                    } else {
+                        Toast.makeText(requireContext(), "Permiso denegado", Toast.LENGTH_SHORT).show();
+                    }
+                });
+```
 
-// 2) Abre el selector del sistema y recibe la Uri elegida
+`RequestPermission` define: **Input** `String` (el permiso a pedir) → **Output** `Boolean` (concedido o no).
+
+**Flujo del permiso:**
+```
+click en "Seleccionar imagen"
+        │
+        ▼
+checkSelfPermission()
+        │
+   ┌────┴────┐
+GRANTED     DENIED
+   │           │
+   ▼           ▼
+openGallery()  permissionLauncher.launch(permission) → diálogo del sistema
+                    │
+               ┌────┴────┐
+           Permitir    Denegar
+               │           │
+               ▼           ▼
+          openGallery()   Toast "Permiso denegado"
+```
+
+### Paso 3 — Abrir la galería
+
+Se usa el mismo mecanismo del paso 2, con otro contrato: `ActivityResultContracts.GetContent`.
+
+```java
 private final ActivityResultLauncher<String> galleryLauncher =
-        registerForActivityResult(new ActivityResultContracts.GetContent(),
-                uri -> { if (uri != null) saveAndDisplay(uri); });
+        registerForActivityResult(
+                new ActivityResultContracts.GetContent(), // contrato: elegir contenido por MIME type
+                uri -> {                                  // callback: Uri de la imagen elegida
+                    if (uri != null) {
+                        saveAndDisplay(uri);
+                    }
+                });
+
+private void openGallery() {
+    galleryLauncher.launch("image/*"); // filtro MIME: solo imágenes
+}
 ```
 
-`GetContent` delega en la app de galería del sistema — no hace falta declarar ningún `<intent-filter>` propio ni copiar el archivo: se recibe una `Uri` de solo lectura que apunta directo al content provider de la galería.
+`GetContent` define: **Input** `String` (MIME type, `"image/*"`) → **Output** `Uri` (la imagen elegida, o `null` si se canceló). Delega en la app de galería instalada en el sistema (Google Photos, Samsung Gallery, etc.) — no hace falta declarar ningún `<intent-filter>` propio.
 
-### Persistencia — solo se guarda la `Uri`, no la imagen
+### Paso 4 — Recibir la `Uri` en el callback
+
+Con `GetContent`, el callback recibe la `Uri` directamente, sin `resultCode` ni `Intent` de respuesta que procesar:
 
 ```java
-SharedPreferences prefs = requireContext().getSharedPreferences("profile_prefs", MODE_PRIVATE);
-prefs.edit().putString("image_uri", uri.toString()).apply();
+uri -> {
+    if (uri != null) {   // null si el usuario canceló
+        saveAndDisplay(uri);
+    }
+}
 ```
 
-Al volver a entrar al fragment, `loadSavedImage()` lee esa `Uri` guardada y la vuelve a cargar — la imagen en sí sigue viviendo en la galería del dispositivo, la app solo recuerda la referencia.
+**Qué es una `Uri` acá:** no es una ruta de archivo como `/sdcard/DCIM/foto.jpg` — es un identificador que apunta a un recurso gestionado por un `ContentProvider`:
 
-### Mostrar con Glide — `circleCrop()`
+```
+content://media/external/images/media/42
+│         │                            │
+│         │                            └── ID del recurso en MediaStore
+│         └── Autoridad: "media" (proveedor de contenido de Android)
+└── Esquema: "content" (datos gestionados por un ContentProvider)
+```
+
+Glide entiende este esquema nativamente: puede cargar la imagen directo desde la `Uri`, sin copiarla ni convertirla.
+
+### Paso 5 — Persistir la `Uri` (no la imagen)
+
+La `Uri` que llega al callback es un objeto en memoria — no sobrevive al cierre de la app. Para que la selección persista entre sesiones, se guarda como `String` en `SharedPreferences`:
 
 ```java
-Glide.with(this)
-        .load(uri)
-        .circleCrop()   // recorta la imagen en forma circular
-        .into(ivProfile);
+private void saveAndDisplay(Uri uri) {
+    SharedPreferences prefs = requireContext()
+            .getSharedPreferences("profile_prefs", Context.MODE_PRIVATE);
+    prefs.edit().putString("image_uri", uri.toString()).apply();
+    displayImage(uri);
+}
+
+private void loadSavedImage() {
+    SharedPreferences prefs = requireContext()
+            .getSharedPreferences("profile_prefs", Context.MODE_PRIVATE);
+    String uriString = prefs.getString("image_uri", null);
+    if (uriString != null) {
+        displayImage(Uri.parse(uriString)); // String → Uri
+    }
+}
 ```
+
+La imagen real **no** se copia al sandbox de la app — sigue viviendo en la galería del dispositivo; la app solo recuerda la referencia.
+
+### Paso 6 — Mostrar con Glide y `circleCrop()`
+
+Cargar una imagen "a mano" requiere manejar varios problemas a la vez:
+
+| Problema | Solución de Glide |
+|----------|-------------------|
+| Decodificar una imagen grande en el hilo principal | Carga en background automáticamente |
+| El Fragment se destruye antes de que termine de cargar | Cancela la carga sola (`Glide.with(this)` se ata al ciclo de vida) |
+| Cargar la misma imagen repetidas veces | Caché en memoria y disco |
+| Recortar en círculo, bordes redondeados, etc. | Transformaciones integradas |
+
+```java
+private void displayImage(Uri uri) {
+    Glide.with(this)   // vincula la carga al ciclo de vida del Fragment
+         .load(uri)    // fuente: la Uri de la galería
+         .circleCrop() // recorta la imagen en forma circular con anti-aliasing
+         .into(ivProfile); // destino: el ImageView
+}
+```
+
+Pasar `this` (el Fragment) en vez de `getApplicationContext()` es lo que le permite a Glide pausar/cancelar la carga si la pantalla se cierra antes de que termine.
 
 ### Dónde se persiste físicamente
 
 ```
-/data/data/com.example.activitiesandviews/shared_prefs/profile_prefs.xml   ← solo la Uri (texto plano)
+/data/data/com.example.activitiesandviews/shared_prefs/profile_prefs.xml
 ```
-La imagen real permanece en el almacenamiento compartido de la galería (`content://media/...`), fuera del sandbox de la app.
+```xml
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="image_uri">content://media/external/images/media/42</string>
+</map>
+```
+La imagen en sí permanece en el almacenamiento compartido de la galería (`content://media/...`), fuera del sandbox de la app — solo la referencia (`Uri`) vive en `profile_prefs.xml`, en texto plano.
+
+**Cómo observarlo en Android Studio:**
+1. `View` → `Tool Windows` → `Device File Explorer`
+2. Navegar a: `data/data/com.example.activitiesandviews/shared_prefs/`
+3. Doble click en `profile_prefs.xml` — se ve la `Uri` guardada en texto plano
+
+### Archivos modificados / creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `app/src/main/AndroidManifest.xml` | Permisos `READ_MEDIA_IMAGES` y `READ_EXTERNAL_STORAGE` |
+| `ui/storage/ProfileImageFragment.java` | Nuevo — implementación de los 6 pasos |
+| `res/layout/fragment_profile_image.xml` | Layout nuevo con `ImageView` y `Button` |
+| `res/navigation/home_nav_graph.xml` | Destino y acción `action_storageMenu_to_profileImage` |
+| `res/layout/fragment_storage_menu.xml` | Botón "Imagen de Perfil — Galería + Glide" agregado |
+| `ui/storage/StorageMenuFragment.java` | Handler del nuevo botón |
 
 ---
 
