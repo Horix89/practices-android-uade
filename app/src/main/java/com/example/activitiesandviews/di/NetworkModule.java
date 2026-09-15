@@ -25,7 +25,7 @@ public class NetworkModule {
 
     @Provides
     @Singleton
-    public OkHttpClient provideOkHttp(TokenManager tokenManager) {
+    public OkHttpClient provideOkHttp(TokenManager tokenManager, AuthEventBus authEventBus) {
         return new OkHttpClient.Builder()
                 .addInterceptor(chain -> {
                     String token = tokenManager.getToken();
@@ -38,7 +38,13 @@ public class NetworkModule {
                     } else {
                         Log.d(TAG, "Sin token — request sin Authorization header");
                     }
-                    return chain.proceed(request);
+                    okhttp3.Response response = chain.proceed(request);
+                    if (response.code() == 401) {
+                        Log.d(TAG, "Token expirado — limpiando sesión");
+                        tokenManager.clearToken();
+                        authEventBus.emitSessionExpired();
+                    }
+                    return response;
                 })
                 .build();
     }
