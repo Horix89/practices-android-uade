@@ -32,6 +32,7 @@ public class StorageMenuFragment extends Fragment {
         Button btnEncryptedPrefs = view.findViewById(R.id.btnEncryptedPrefs);
         Button btnSharedPreferences = view.findViewById(R.id.btnSharedPreferences);
         Button btnDataStore = view.findViewById(R.id.btnDataStore);
+        Button btnProfileImage = view.findViewById(R.id.btnProfileImage);
 
         btnRoom.setOnClickListener(v ->
                 Navigation.findNavController(view).navigate(R.id.action_storageMenu_to_room));
@@ -47,5 +48,8 @@ public class StorageMenuFragment extends Fragment {
 
         btnDataStore.setOnClickListener(v ->
                 Navigation.findNavController(view).navigate(R.id.action_storageMenu_to_dataStore));
+
+        btnProfileImage.setOnClickListener(v ->
+                Navigation.findNavController(view).navigate(R.id.action_storageMenu_to_profileImage));
     }
 }

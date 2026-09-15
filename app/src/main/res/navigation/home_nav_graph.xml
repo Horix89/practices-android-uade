@@ -82,6 +82,10 @@
         <action
             android:id="@+id/action_storageMenu_to_dataStore"
             app:destination="@id/dataStoreFragment" />
+
+        <action
+            android:id="@+id/action_storageMenu_to_profileImage"
+            app:destination="@id/profileImageFragment" />
     </fragment>
 
     <fragment
@@ -113,6 +117,12 @@
         android:name="com.example.activitiesandviews.ui.storage.DataStoreFragment"
         android:label="DataStore"
         tools:layout="@layout/fragment_data_store" />
+
+    <fragment
+        android:id="@+id/profileImageFragment"
+        android:name="com.example.activitiesandviews.ui.storage.ProfileImageFragment"
+        android:label="Imagen de Perfil"
+        tools:layout="@layout/fragment_profile_image" />
 
     <fragment
         android:id="@+id/biometricFragment"

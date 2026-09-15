@@ -4,6 +4,16 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Permiso para leer imágenes de la galería (ProfileImageFragment) -->
+    <!-- Android 13+ (API 33): permiso granular solo para imágenes -->
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES"
+        android:minSdkVersion="33" />
+    <!-- Android 12 y anteriores (API ≤ 32): permiso general de almacenamiento externo -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application
         android:name=".MyApp"
         android:allowBackup="true"
