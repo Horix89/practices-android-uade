@@ -1,6 +1,10 @@
-# feature/storage — Métodos de Persistencia en Android
+# feature/biometric — Persistencia, Biometría y Selección de Imagen en Android
 
-Proyecto de prácticas en Android (Java). Este branch agrega ejemplos funcionales de los métodos de persistencia más comunes, accesibles desde Home → **"Ejemplos de Storage"**.
+Proyecto de prácticas en Android (Java). Sobre la base de `feature/storage` (métodos de persistencia, accesibles desde Home → **"Ejemplos de Storage"**), este branch incorpora tres funcionalidades portadas desde el repositorio [`mobile-practices-android`](https://github.com/Horix89/mobile-practices-android) (branches `feature/biometric`, `feature/biometric-reauth` y `feature/profile-image`):
+
+1. **Biometría standalone** (sección 6) — pantalla de práctica con `BiometricPrompt`, accesible desde Home → **"Biometría"**.
+2. **Re-autenticación biométrica en el Login** (sección 7) — el login recuerda al usuario y, en accesos siguientes, pide huella/PIN en vez del formulario; además la sesión se cierra sola si el backend devuelve 401.
+3. **Selección de imagen de perfil** (sección 8) — elegir una foto de la galería y mostrarla recortada en círculo con Glide, accesible desde Home → Storage → **"Imagen de Perfil"**.
 
 ---
 
@@ -431,6 +435,208 @@ A diferencia de SharedPreferences, el archivo `.preferences_pb` es **binario** (
 
 ---
 
+## 6. Biometría (standalone) — `BiometricFragment.java`
+
+**Caso de uso:** práctica aislada de la API `androidx.biometric`, sin integrarla todavía al flujo de login. Se llega desde Home → **"Biometría"**.
+
+### Dependencia
+```kotlin
+implementation("androidx.biometric:biometric:1.2.0-alpha05")
+```
+
+### Paso 1 — `BiometricManager`: verificar disponibilidad antes de mostrar el prompt
+
+Nunca hay que asumir que el dispositivo tiene biometría disponible. `canAuthenticate(...)` devuelve uno de varios códigos según hardware, enrolamiento y disponibilidad momentánea:
+
+```java
+private static final int ALLOWED_AUTHENTICATORS =
+        Authenticators.BIOMETRIC_STRONG | Authenticators.DEVICE_CREDENTIAL;
+
+BiometricManager manager = BiometricManager.from(requireContext());
+int result = manager.canAuthenticate(ALLOWED_AUTHENTICATORS);
+
+switch (result) {
+    case BiometricManager.BIOMETRIC_SUCCESS -> // hay hardware, disponible y con credenciales enroladas
+    case BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> // no tiene sensor
+    case BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> // el sensor existe pero no responde ahora
+    case BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> // no hay huella/PIN configurado — ofrecer ir a Ajustes
+}
+```
+
+`BIOMETRIC_STRONG | DEVICE_CREDENTIAL` permite que el sistema acepte también el PIN/patrón del dispositivo como alternativa a la huella — útil en emuladores o dispositivos sin sensor físico.
+
+### Paso 2 — `PromptInfo`: define el diálogo del sistema
+
+```java
+BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
+        .setTitle("Práctica Biometría")
+        .setSubtitle("Confirmá tu identidad")
+        .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
+        .build();
+// Con DEVICE_CREDENTIAL habilitado no se puede usar setNegativeButtonText() —
+// el propio sistema ya ofrece "usar PIN" como alternativa
+```
+
+### Paso 3 — `BiometricPrompt`: lanzar y escuchar los tres callbacks
+
+```java
+BiometricPrompt biometricPrompt = new BiometricPrompt(this, executor,
+        new BiometricPrompt.AuthenticationCallback() {
+            public void onAuthenticationSucceeded(AuthenticationResult result) { /* validado OK */ }
+            public void onAuthenticationFailed() { /* no coincide, el prompt sigue abierto */ }
+            public void onAuthenticationError(int errorCode, CharSequence errString) { /* cancelado o error del sistema */ }
+        });
+biometricPrompt.authenticate(promptInfo);
+```
+
+- `onAuthenticationFailed()` se dispara por cada intento fallido individual (el diálogo sigue abierto).
+- `onAuthenticationError(...)` es terminal: usuario canceló, superó los intentos, o un error de hardware — el diálogo se cierra.
+
+**Ir a Ajustes si no hay enrolamiento:**
+```java
+startActivity(new Intent(Settings.ACTION_BIOMETRIC_ENROLL));
+```
+
+---
+
+## 7. Re-autenticación biométrica en el Login — `LoginFragment.java`, `TokenManager.java`, `AuthEventBus.java`
+
+**Caso de uso:** integrar la biometría al flujo real de autenticación, no solo como demo aislada. La primera vez el usuario ingresa usuario/contraseña; en accesos siguientes, si activó la opción, el login pide huella/PIN directamente.
+
+### Flujo
+
+1. **Primer login:** se muestra el formulario de credenciales (`layoutCredentials`). Al presionar "Ingresar" se guarda un token simulado y se pregunta con un `AlertDialog` si el usuario quiere activar el acceso biométrico.
+2. **Si acepta:** se guarda `biometric_enabled = true` y una copia del token cifrada con `EncryptedSharedPreferences` (`TokenManager.saveEncryptedToken(...)`).
+3. **Logins siguientes:** `onViewCreated` detecta `tokenManager.isBiometricEnabled()` y muestra directamente el `BiometricPrompt` (`layoutBiometric`) en vez del formulario. Al validar la huella, se recupera el token cifrado y se navega a Home. Si el usuario cancela o el hardware no está disponible, cae de nuevo al formulario de credenciales (`btnUsarCredenciales` también permite volver manualmente).
+
+```java
+if (tokenManager.isBiometricEnabled()) {
+    showBiometricPrompt();
+} else {
+    showCredentialForm();
+}
+```
+
+### `TokenManager.java` — dos capas de almacenamiento
+
+Amplía el `TokenManager` original (sección de `SharedPreferences` del token) con:
+
+```java
+// Flag de activación
+public boolean isBiometricEnabled();
+public void setBiometricEnabled(boolean enabled);
+
+// Token cifrado — mismo mecanismo que EncryptedPrefsFragment (sección 4),
+// pero en un archivo separado: "encrypted_auth_prefs"
+public void saveEncryptedToken(String token);
+public String getEncryptedToken();
+```
+
+El token de la sesión activa sigue en texto plano en `auth_prefs.xml` (se necesita leer rápido en cada request), mientras que la copia usada para restaurar la sesión tras el prompt biométrico vive cifrada — así un acceso de lectura al almacenamiento interno del dispositivo no expone el token reutilizable sin pasar antes por el sensor.
+
+### Cierre de sesión automático ante un 401 — `AuthEventBus.java`
+
+Para que la re-autenticación tenga sentido, la sesión debe poder "vencer". Se agregó un event bus con Hilt (`@Singleton`) basado en `LiveData`:
+
+```java
+@Singleton
+public class AuthEventBus {
+    private final MutableLiveData<Boolean> sessionExpired = new MutableLiveData<>();
+    public LiveData<Boolean> getSessionExpired() { return sessionExpired; }
+    public void emitSessionExpired() { sessionExpired.postValue(true); } // postValue: thread-safe desde el hilo de red
+}
+```
+
+El interceptor de OkHttp en `NetworkModule.java` detecta la respuesta 401, limpia el token y emite el evento:
+
+```java
+okhttp3.Response response = chain.proceed(request);
+if (response.code() == 401) {
+    tokenManager.clearToken();
+    authEventBus.emitSessionExpired();
+}
+return response;
+```
+
+`MainActivity.java` observa el `LiveData` y navega de vuelta a `auth_nav_graph` (limpiando el back stack) apenas se emite el evento:
+
+```java
+authEventBus.getSessionExpired().observe(this, expired -> {
+    if (Boolean.TRUE.equals(expired)) {
+        navController.navigate(R.id.auth_nav_graph, null,
+                new NavOptions.Builder().setPopUpTo(R.id.nav_graph, true).build());
+    }
+});
+```
+
+Nótese que `biometric_enabled` **no** se borra al expirar la sesión — el usuario vuelve a la pantalla de login y, si ya lo había activado, el próximo ingreso vuelve a pedir biometría en lugar del formulario.
+
+---
+
+## 8. Imagen de Perfil (Galería + Glide) — `ProfileImageFragment.java`
+
+**Caso de uso:** elegir una foto de la galería del dispositivo y persistir la selección, con las APIs modernas de Activity Result y permisos runtime. Se llega desde Home → Storage → **"Imagen de Perfil"**.
+
+### Permisos runtime — `AndroidManifest.xml`
+
+Desde Android 13 (API 33), leer la galería requiere un permiso granular específico para imágenes en vez del permiso general de almacenamiento:
+
+```xml
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+```
+
+```java
+String permission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        ? Manifest.permission.READ_MEDIA_IMAGES
+        : Manifest.permission.READ_EXTERNAL_STORAGE;
+```
+
+### `ActivityResultLauncher` — dos contratos encadenados
+
+En vez del patrón antiguo `onActivityResult(requestCode, ...)`, se usan dos launchers tipados, registrados como campos del Fragment (deben crearse antes de `onStart()`):
+
+```java
+// 1) Pide el permiso; si es concedido, abre la galería
+private final ActivityResultLauncher<String> permissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                isGranted -> { if (isGranted) openGallery(); else /* Toast */ });
+
+// 2) Abre el selector del sistema y recibe la Uri elegida
+private final ActivityResultLauncher<String> galleryLauncher =
+        registerForActivityResult(new ActivityResultContracts.GetContent(),
+                uri -> { if (uri != null) saveAndDisplay(uri); });
+```
+
+`GetContent` delega en la app de galería del sistema — no hace falta declarar ningún `<intent-filter>` propio ni copiar el archivo: se recibe una `Uri` de solo lectura que apunta directo al content provider de la galería.
+
+### Persistencia — solo se guarda la `Uri`, no la imagen
+
+```java
+SharedPreferences prefs = requireContext().getSharedPreferences("profile_prefs", MODE_PRIVATE);
+prefs.edit().putString("image_uri", uri.toString()).apply();
+```
+
+Al volver a entrar al fragment, `loadSavedImage()` lee esa `Uri` guardada y la vuelve a cargar — la imagen en sí sigue viviendo en la galería del dispositivo, la app solo recuerda la referencia.
+
+### Mostrar con Glide — `circleCrop()`
+
+```java
+Glide.with(this)
+        .load(uri)
+        .circleCrop()   // recorta la imagen en forma circular
+        .into(ivProfile);
+```
+
+### Dónde se persiste físicamente
+
+```
+/data/data/com.example.activitiesandviews/shared_prefs/profile_prefs.xml   ← solo la Uri (texto plano)
+```
+La imagen real permanece en el almacenamiento compartido de la galería (`content://media/...`), fuera del sandbox de la app.
+
+---
+
 ## Resumen de persistencia física
 
 | Método | Ruta en el dispositivo | Formato | Legible a simple vista |
@@ -441,6 +647,8 @@ A diferencia de SharedPreferences, el archivo `.preferences_pb` es **binario** (
 | Files | `.../files/mi_archivo.txt` | Texto plano | Sí |
 | EncryptedSharedPreferences | `.../shared_prefs/secure_prefs.xml` | XML cifrado | No |
 | DataStore | `.../files/datastore/demo_datastore.preferences_pb` | Protocol Buffers binario | No |
+| Token cifrado (re-auth biométrico) | `.../shared_prefs/encrypted_auth_prefs.xml` | XML cifrado | No |
+| Imagen de perfil (referencia) | `.../shared_prefs/profile_prefs.xml` | XML texto plano (solo la `Uri`) | Sí |
 
 ---
 
@@ -449,18 +657,27 @@ A diferencia de SharedPreferences, el archivo `.preferences_pb` es **binario** (
 ```
 app/
 ├── di/
-│   └── StorageModule.java          # Hilt: AppDatabase, NoteDao, SharedPreferences, RxDataStore<Preferences>
+│   ├── StorageModule.java          # Hilt: AppDatabase, NoteDao, SharedPreferences, RxDataStore<Preferences>
+│   ├── NetworkModule.java          # Hilt: OkHttp (header Authorization + detección de 401), Retrofit
+│   └── AuthEventBus.java           # Hilt @Singleton — LiveData<Boolean> sessionExpired
 ├── data/local/
 │   ├── db/
 │   │   ├── Note.java               # @Entity — tabla "notes"
 │   │   ├── NoteDao.java            # @Dao — insert / getAll / deleteAll
 │   │   └── AppDatabase.java        # @Database — punto de entrada a Room
-│   └── TokenManager.java           # SharedPreferences — token de sesión
-└── ui/storage/
-    ├── StorageMenuFragment.java       # menú con 5 botones
-    ├── RoomFragment.java              # ejemplo Room + ExecutorService
-    ├── FilesFragment.java             # ejemplo java.io filesystem
-    ├── EncryptedPrefsFragment.java    # ejemplo EncryptedSharedPreferences
-    ├── SharedPreferencesFragment.java # ejemplo SharedPreferences genérico (demo_prefs, vía Hilt)
-    └── DataStoreFragment.java         # ejemplo DataStore (Preferences) + RxJava3
+│   └── TokenManager.java           # token plano (auth_prefs) + flag biométrico + token cifrado (encrypted_auth_prefs)
+└── ui/
+    ├── MainActivity.java              # observa AuthEventBus y navega a auth_nav_graph si la sesión expira
+    ├── auth/
+    │   └── LoginFragment.java         # formulario de credenciales o BiometricPrompt, según biometric_enabled
+    ├── biometric/
+    │   └── BiometricFragment.java     # práctica standalone de BiometricManager + BiometricPrompt
+    └── storage/
+        ├── StorageMenuFragment.java       # menú con 6 botones
+        ├── RoomFragment.java              # ejemplo Room + ExecutorService
+        ├── FilesFragment.java             # ejemplo java.io filesystem
+        ├── EncryptedPrefsFragment.java    # ejemplo EncryptedSharedPreferences
+        ├── SharedPreferencesFragment.java # ejemplo SharedPreferences genérico (demo_prefs, vía Hilt)
+        ├── DataStoreFragment.java         # ejemplo DataStore (Preferences) + RxJava3
+        └── ProfileImageFragment.java      # selector de galería (Activity Result API) + Glide circleCrop
 ```
