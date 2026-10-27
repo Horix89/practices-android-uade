@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FRAGMENT SIN MATERIAL COMPONENTS (Legacy)
+    ─────────────────────────────────────────────────────────────────────────────
+    La Toolbar de la Activity (automática) aparece arriba con el título "Legacy UI"
+    y el botón back. Ese es el comportamiento correcto gracias a NavigationUI.
+
+    ESTE layout demuestra los problemas de los componentes clásicos:
+
+    1. Los colores están HARDCODEADOS (#FF5722, #FFFFFF, etc.).
+       Si cambiás colorPrimary en themes.xml → esto NO cambia.
+
+    2. No hay modo oscuro automático: el fondo blanco, el texto negro y el botón
+       naranja son siempre iguales, independientemente del modo del sistema.
+
+    3. No hay ripple effect correcto en los botones clásicos.
+
+    4. El "card" es solo un LinearLayout con fondo blanco hardcodeado → sin esquinas
+       redondeadas, sin colorSurface del Theme.
+
+    5. La validación del campo email se hace con TextView separado (manual),
+       en lugar de la integración automática de TextInputLayout.setError().
+-->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/legacy_screen_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:text="Los colores están hardcodeados."
+            android:textColor="@color/legacy_hint"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Activá el modo oscuro: esta pantalla no cambia."
+            android:textColor="@color/legacy_hint"
+            android:textSize="14sp" />
+
+        <!--
+            "Card" simulada: solo un LinearLayout con fondo blanco hardcodeado.
+            En modo oscuro sigue siendo blanco → contraste roto.
+            No tiene shapeAppearance → sin esquinas redondeadas.
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:background="@color/legacy_card_bg"
+            android:elevation="4dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="Formulario Legacy"
+                android:textColor="@color/legacy_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nombre"
+                android:textColor="@color/legacy_hint"
+                android:textSize="12sp" />
+
+            <!-- EditText plano: sin hint animado, sin borde de colorPrimary -->
+            <EditText
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="Nombre" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Email"
+                android:textColor="@color/legacy_hint"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/etLegacyEmail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Email"
+                android:inputType="textEmailAddress" />
+
+            <!--
+                Error manual: hay que manejar visibilidad y texto por código.
+                TextInputLayout.setError() hace esto automáticamente y con animación.
+            -->
+            <TextView
+                android:id="@+id/tvEmailError"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#B00020"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!--
+            Button clásico con color hardcodeado.
+            No toma colorPrimary del Theme → si cambiás el Theme, esto no cambia.
+        -->
+        <Button
+            android:id="@+id/btnLegacyAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:background="@color/legacy_button_bg"
+            android:text="Validar (Button clásico)"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btnBackToMaterial"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#EEEEEE"
+            android:text="← Volver a Material"
+            android:textColor="#6200EE" />
+
+    </LinearLayout>
+</ScrollView>

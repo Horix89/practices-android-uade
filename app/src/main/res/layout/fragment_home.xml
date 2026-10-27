@@ -4,7 +4,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp"
     tools:context=".ui.home.HomeFragment">
 
     <TextView
@@ -48,10 +47,54 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="Biometría"
-        app:layout_constraintBottom_toTopOf="@id/btnLogout"
+        app:layout_constraintBottom_toTopOf="@id/btnMaterialDemo"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/btnStorage" />
+
+    <Button
+        android:id="@+id/btnMaterialDemo"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Material vs Legacy"
+        app:layout_constraintBottom_toTopOf="@id/btnQr"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnBiometric" />
+
+    <Button
+        android:id="@+id/btnQr"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Lector QR"
+        app:layout_constraintBottom_toTopOf="@id/btnPolling"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnMaterialDemo" />
+
+    <Button
+        android:id="@+id/btnPolling"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Iniciar Notificaciones (Long Polling)"
+        app:layout_constraintBottom_toTopOf="@id/btnNotifEjemplo"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnQr" />
+
+    <Button
+        android:id="@+id/btnNotifEjemplo"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Enviar notificación de ejemplo"
+        app:layout_constraintBottom_toTopOf="@id/btnLogout"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnPolling" />
 
     <Button
         android:id="@+id/btnLogout"
@@ -62,6 +105,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btnBiometric" />
+        app:layout_constraintTop_toBottomOf="@id/btnMaterialDemo" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

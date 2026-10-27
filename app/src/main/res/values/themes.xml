@@ -1,8 +1,19 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.ActivitiesAndViews" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!--
+        LIGHT MODE THEME
+        Basado en Theme.MaterialComponents.DayNight.NoActionBar
+        Los colores se definen aquí y los componentes Material los consumen automáticamente.
+        Cambiar colorPrimary aquí → cambia TODOS los MaterialButton, FAB, TextInputLayout, etc.
+    -->
+    <style name="Base.Theme.ActivitiesAndViews" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/light_primary</item>
+        <item name="colorPrimaryVariant">@color/light_primary_variant</item>
+        <item name="colorOnPrimary">@color/light_on_primary</item>
+        <item name="colorSecondary">@color/light_secondary</item>
+        <item name="colorOnSecondary">@color/light_on_secondary</item>
+        <item name="colorSurface">@color/light_surface</item>
+        <item name="colorOnSurface">@color/light_on_surface</item>
+        <item name="colorError">@color/light_error</item>
     </style>
 
     <style name="Theme.ActivitiesAndViews" parent="Base.Theme.ActivitiesAndViews" />

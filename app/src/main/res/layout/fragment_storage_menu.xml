@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
-
-<LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="24dp"
     android:gravity="center_horizontal">
@@ -48,25 +43,9 @@
         android:layout_marginBottom="12dp" />
 
     <Button
-        android:id="@+id/btnSharedPreferences"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="SharedPreferences — Pares clave-valor simples"
-        android:layout_marginBottom="12dp" />
-
-    <Button
-        android:id="@+id/btnDataStore"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="DataStore — Reemplazo moderno y reactivo"
-        android:layout_marginBottom="12dp" />
-
-    <Button
         android:id="@+id/btnProfileImage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Imagen de Perfil — Galería + Glide" />
 
 </LinearLayout>
-
-</ScrollView>

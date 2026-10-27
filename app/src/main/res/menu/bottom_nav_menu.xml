@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Menú del BottomNavigationView.
+
+    REGLA CLAVE: los android:id de cada item deben coincidir EXACTAMENTE
+    con los android:id de los fragments en el nav_graph.
+    NavigationUI usa esos IDs para saber a qué destino navegar al tocar cada tab.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/homeFragment"
+        android:icon="@drawable/ic_nav_home"
+        android:title="Inicio" />
+
+    <item
+        android:id="@+id/pokemonListFragment"
+        android:icon="@drawable/ic_nav_list"
+        android:title="Pokémon" />
+
+    <item
+        android:id="@+id/materialDemoFragment"
+        android:icon="@drawable/ic_nav_palette"
+        android:title="Material UI" />
+
+</menu>

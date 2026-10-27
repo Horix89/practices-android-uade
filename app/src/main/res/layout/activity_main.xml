@@ -1,19 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    PATRÓN: Toolbar + BottomNavigationView
+    ──────────────────────────────────────────────────────────────────────────
+    Estructura estándar de una app con navegación principal por tabs:
+
+        [  MaterialToolbar  ]   ← título + back automáticos via NavigationUI
+        [                   ]
+        [  NavHostFragment  ]   ← contenido del fragment activo
+        [                   ]
+        [ BottomNavigation  ]   ← tabs principales (oculto en login y sub-pantallas)
+
+    Tanto la Toolbar como el BottomNav son gestionados en MainActivity.
+    Los fragments no saben nada de esta estructura.
+-->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!--
+        MaterialToolbar: AppBar compartida por toda la Activity.
+        NavigationUI sincroniza título y botón back automáticamente.
+        colorPrimary del Theme → fondo. colorOnPrimary → íconos y texto.
+    -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!--
+        El NavHostFragment ocupa el espacio entre Toolbar y BottomNav.
+        app:defaultNavHost="true" → intercepta el botón back del sistema.
+    -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/nav_host_fragment"
         android:name="androidx.navigation.fragment.NavHostFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:defaultNavHost="true"
+        app:layout_constraintBottom_toTopOf="@id/bottom_nav"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:navGraph="@navigation/nav_graph" />
+
+    <!--
+        BottomNavigationView: navegación principal entre secciones.
+        app:menu referencia el archivo con los items (IDs = IDs del nav_graph).
+        NavigationUI.setupWithNavController lo conecta al NavController.
+        Se oculta programáticamente en pantallas que no son secciones principales.
+    -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_nav"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:navGraph="@navigation/nav_graph" />
+        app:menu="@menu/bottom_nav_menu" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

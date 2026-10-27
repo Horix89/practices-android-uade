@@ -32,7 +32,20 @@
         <action
             android:id="@+id/action_home_to_biometric"
             app:destination="@id/biometricFragment" />
+
+        <action
+            android:id="@+id/action_home_to_material_demo"
+            app:destination="@id/materialDemoFragment" />
+
+        <action
+            android:id="@+id/action_home_to_qr"
+            app:destination="@id/qrScanFragment" />
     </fragment>
+
+    <fragment
+        android:id="@+id/qrScanFragment"
+        android:name="com.example.activitiesandviews.ui.qr.QrScanFragment"
+        android:label="Lector QR" />
 
     <fragment
         android:id="@+id/pokemonListFragment"
@@ -76,14 +89,6 @@
             app:destination="@id/encryptedPrefsFragment" />
 
         <action
-            android:id="@+id/action_storageMenu_to_sharedPreferences"
-            app:destination="@id/sharedPreferencesFragment" />
-
-        <action
-            android:id="@+id/action_storageMenu_to_dataStore"
-            app:destination="@id/dataStoreFragment" />
-
-        <action
             android:id="@+id/action_storageMenu_to_profileImage"
             app:destination="@id/profileImageFragment" />
     </fragment>
@@ -107,18 +112,6 @@
         tools:layout="@layout/fragment_encrypted_prefs" />
 
     <fragment
-        android:id="@+id/sharedPreferencesFragment"
-        android:name="com.example.activitiesandviews.ui.storage.SharedPreferencesFragment"
-        android:label="SharedPreferences"
-        tools:layout="@layout/fragment_shared_preferences" />
-
-    <fragment
-        android:id="@+id/dataStoreFragment"
-        android:name="com.example.activitiesandviews.ui.storage.DataStoreFragment"
-        android:label="DataStore"
-        tools:layout="@layout/fragment_data_store" />
-
-    <fragment
         android:id="@+id/profileImageFragment"
         android:name="com.example.activitiesandviews.ui.storage.ProfileImageFragment"
         android:label="Imagen de Perfil"
@@ -129,5 +122,22 @@
         android:name="com.example.activitiesandviews.ui.biometric.BiometricFragment"
         android:label="Biometría"
         tools:layout="@layout/fragment_biometric" />
+
+    <fragment
+        android:id="@+id/materialDemoFragment"
+        android:name="com.example.activitiesandviews.ui.material.MaterialDemoFragment"
+        android:label="Material UI"
+        tools:layout="@layout/fragment_material_demo">
+
+        <action
+            android:id="@+id/action_material_to_legacy"
+            app:destination="@id/legacyDemoFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/legacyDemoFragment"
+        android:name="com.example.activitiesandviews.ui.material.LegacyDemoFragment"
+        android:label="Legacy UI"
+        tools:layout="@layout/fragment_legacy_demo" />
 
 </navigation>

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FRAGMENT CON MATERIAL COMPONENTS
+    ─────────────────────────────────────────────────────────────────────────────
+    La Toolbar ya NO está aquí. Está en activity_main.xml y la gestiona MainActivity
+    a través de NavigationUI. El título "Material UI" y el botón back son automáticos.
+
+    NINGÚN color está hardcodeado. Todos los componentes leen su color del Theme:
+
+      MaterialButton      → colorPrimary (fondo), colorOnPrimary (texto)
+      TextInputLayout     → colorPrimary (borde al enfocar, label)
+      MaterialCardView    → colorSurface (fondo)
+      FloatingActionButton→ colorSecondary (fondo)
+
+    Al cambiar colorPrimary en themes.xml, TODO cambia automáticamente.
+    Al activar modo oscuro, Android aplica values-night/themes.xml → mismos atributos,
+    distintos colores → la UI se adapta sin tocar este archivo.
+-->
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="Todos los colores vienen del Theme."
+                android:textAppearance="?attr/textAppearanceBody1" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="Cambiá colorPrimary en themes.xml y todo se actualiza solo."
+                android:textAppearance="?attr/textAppearanceCaption" />
+
+            <!--
+                MaterialCardView: esquinas redondeadas, sombra y colorSurface del Theme.
+                No necesita background hardcodeado.
+            -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:text="Formulario Material"
+                        android:textAppearance="?attr/textAppearanceSubtitle1" />
+
+                    <!--
+                        TextInputLayout: hint animado, borde que cambia a colorPrimary
+                        al enfocar, y validación de error integrada con setError().
+                    -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="12dp"
+                        android:hint="Nombre"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Email"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        app:errorEnabled="true">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textEmailAddress" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!--
+                MaterialButton: toma colorPrimary (fondo) y colorOnPrimary (texto).
+                Incluye ripple effect y shapeAppearance (bordes redondeados) automáticos.
+            -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMaterialAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="Validar (MaterialButton)" />
+
+            <!-- OutlinedButton: variante que muestra el borde con colorPrimary -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGoToLegacy"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Comparar con versión Legacy →" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!--
+        FloatingActionButton: toma colorSecondary del Theme como fondo.
+        CoordinatorLayout lo mueve hacia arriba cuando aparece un Snackbar.
+    -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="Agregar"
+        app:srcCompat="@android:drawable/ic_input_add" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

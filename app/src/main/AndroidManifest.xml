@@ -3,8 +3,15 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- FOREGROUND_SERVICE: permite que el Service se mantenga visible en el panel de notificaciones -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- FOREGROUND_SERVICE_DATA_SYNC: requerido en targetSdk >= 34 para servicios que hacen red en primer plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- POST_NOTIFICATIONS: requerido en API 33+ para mostrar notificaciones al usuario -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Permiso para leer imágenes de la galería (ProfileImageFragment) -->
+    <!-- Paso 1: Permiso para leer imágenes de la galería -->
     <!-- Android 13+ (API 33): permiso granular solo para imágenes -->
     <uses-permission
         android:name="android.permission.READ_MEDIA_IMAGES"
@@ -37,6 +44,12 @@
         <!-- Referencia: navegacion Activity-based (clase anterior) -->
         <activity android:name=".LoginActivity" />
         <activity android:name=".HomeActivity" />
+
+        <!-- foregroundServiceType="dataSync" es obligatorio en targetSdk >= 34 para servicios de red -->
+        <service
+            android:name=".service.PollingService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
 
     </application>
 

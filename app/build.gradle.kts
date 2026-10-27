@@ -52,9 +52,14 @@ dependencies {
     implementation(libs.room.runtime)
     annotationProcessor(libs.room.compiler)
     implementation(libs.security.crypto)
-    implementation(libs.datastore.preferences.rxjava3)
-    implementation(libs.rxjava3)
     implementation(libs.biometric)
+    // CameraX: captura de video frame a frame para el analizador de QR
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    // ML Kit: reconocimiento de códigos de barras/QR sin servidor externo
+    implementation(libs.mlkit.barcode)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
